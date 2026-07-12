@@ -17,11 +17,17 @@ export function configPath(): string {
 }
 
 async function readFileConfig(): Promise<Partial<Config>> {
+  let raw: string;
   try {
-    return JSON.parse(await readFile(configPath(), 'utf8')) as Partial<Config>;
+    raw = await readFile(configPath(), 'utf8');
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
     throw err;
+  }
+  try {
+    return JSON.parse(raw) as Partial<Config>;
+  } catch {
+    return {};
   }
 }
 

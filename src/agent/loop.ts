@@ -49,7 +49,7 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
         const r = await tool.handler(use.input, { cwd: deps.cwd });
         results.push({ type: 'tool_result', toolUseId: use.id, content: r.content, isError: r.isError });
       } catch (err) {
-        results.push({ type: 'tool_result', toolUseId: use.id, content: (err as Error).message, isError: true });
+        results.push({ type: 'tool_result', toolUseId: use.id, content: err instanceof Error ? err.message : String(err), isError: true });
       }
     }
     messages.push({ role: 'user', content: results });

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { loadConfig, saveConfig, configPath } from '../../src/config/index.js';
 
 let dir: string;
@@ -35,5 +35,19 @@ describe('config', () => {
     process.env.ANTHROPIC_API_KEY = 'sk-env';
     const c = await loadConfig();
     expect(c.anthropicApiKey).toBe('sk-env');
+  });
+
+  it('treats a malformed config file as defaults instead of throwing, and recovers on next save', async () => {
+    const path = configPath();
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, 'not json{', 'utf8');
+
+    const c = await loadConfig();
+    expect(c.defaultProvider).toBe('anthropic');
+    expect(c.defaultModel).toBe('claude-opus-4-8');
+
+    await saveConfig({ anthropicApiKey: 'sk-x' });
+    const c2 = await loadConfig();
+    expect(c2.anthropicApiKey).toBe('sk-x');
   });
 });

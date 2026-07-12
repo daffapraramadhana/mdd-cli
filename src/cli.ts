@@ -1,5 +1,6 @@
 // src/cli.ts
 import { createInterface } from 'node:readline/promises';
+import { pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 import { loadConfig, saveConfig, type Config } from './config/index.js';
 import { getProvider } from './providers/index.js';
@@ -12,12 +13,25 @@ import type { Message } from './types.js';
 
 interface RunOpts { provider?: 'anthropic' | 'openai'; model?: string; yes?: boolean; }
 
+export const PROVIDER_DEFAULT_MODEL: Record<'anthropic' | 'openai', string> = {
+  anthropic: 'claude-opus-4-8',
+  openai: 'gpt-5',
+};
+
+export function resolveModel(
+  providerName: 'anthropic' | 'openai',
+  config: { defaultProvider: 'anthropic' | 'openai'; defaultModel: string },
+  optModel?: string,
+): string {
+  if (optModel) return optModel;
+  if (providerName === config.defaultProvider) return config.defaultModel;
+  return PROVIDER_DEFAULT_MODEL[providerName];
+}
+
 async function resolveSetup(opts: RunOpts) {
   const config = await loadConfig();
   const providerName = opts.provider ?? config.defaultProvider;
-  const model =
-    opts.model ??
-    (providerName === config.defaultProvider ? config.defaultModel : providerName === 'openai' ? 'gpt-5' : 'claude-opus-4-8');
+  const model = resolveModel(providerName, config, opts.model);
   const provider = getProvider(providerName, config);
   return { provider, model };
 }
@@ -29,7 +43,7 @@ async function authLogin(): Promise<void> {
     const patch: Partial<Config> = {};
     if (which === 'anthropic' || which === 'both') patch.anthropicApiKey = (await rl.question('Anthropic API key: ')).trim();
     if (which === 'openai' || which === 'both') patch.openaiApiKey = (await rl.question('OpenAI API key: ')).trim();
-    if (which === 'openai') patch.defaultProvider = 'openai';
+    if (which === 'openai') { patch.defaultProvider = 'openai'; patch.defaultModel = 'gpt-5'; }
     await saveConfig(patch);
     process.stdout.write('Saved to ~/.config/mdd/config.json\n');
   } finally { rl.close(); }
@@ -50,10 +64,11 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
       systemPrompt: buildSystemPrompt(cwd), onText: store.appendStreaming, onToolStart: store.addTool,
     });
   } catch (err) {
-    store.appendStreaming(`\nError: ${(err as Error).message}\n`);
+    store.appendStreaming(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
   } finally {
     store.commitStreaming();
     store.setStatus('idle');
+    await new Promise((resolve) => setImmediate(resolve));
     app.unmount();
   }
 }
@@ -80,7 +95,7 @@ async function repl(opts: RunOpts): Promise<void> {
         onText: store.appendStreaming, onToolStart: store.addTool,
       });
     } catch (err) {
-      store.appendStreaming(`\nError: ${(err as Error).message}\n`);
+      store.appendStreaming(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
     } finally {
       store.commitStreaming();
       store.setStatus('idle');
@@ -95,6 +110,7 @@ async function repl(opts: RunOpts): Promise<void> {
 async function main(): Promise<void> {
   const program = new Command();
   program.name('mdd').description('MDD internal terminal coding assistant');
+  program.version('0.1.0');
   program.option('--provider <name>', 'anthropic or openai');
   program.option('--model <name>', 'model id');
   program.option('-y, --yes', 'auto-approve mutating tools');
@@ -115,4 +131,6 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main();
+}

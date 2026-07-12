@@ -1,18 +1,14 @@
 {
   "name": "mdd-cli",
   "version": "0.1.0",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
     "test": "vitest run",
     "build": "tsup",
     "dev": "tsx src/cli.ts"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "MDD",
+  "license": "UNLICENSED",
   "description": "MDD internal terminal coding assistant",
   "type": "module",
   "bin": {

@@ -10,6 +10,7 @@ import { createGate } from '../../src/permissions/index.js';
 import { FakeProvider } from '../../src/providers/fake.js';
 import type { Message } from '../../src/types.js';
 import type { Tool } from '../../src/tools/types.js';
+import type { LLMProvider } from '../../src/providers/index.js';
 
 let dir: string;
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'mdd-')); });
@@ -70,5 +71,38 @@ describe('runTurn', () => {
     expect(tr?.isError).toBe(true);
     expect(tr?.content).toBe('kaboom');
     expect(out.at(-1)?.role).toBe('assistant');
+  });
+
+  it('surfaces a request for an unregistered tool as an error tool_result and completes the turn', async () => {
+    const provider = new FakeProvider([
+      [{ type: 'tool_use', id: 'tu1', name: 'does_not_exist', input: {} }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'done' }, { type: 'done', stopReason: 'end' }],
+    ]);
+    const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'call a bogus tool' }] }], {
+      provider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+    });
+    const tr = out.flatMap((m) => m.content).find((b) => b.type === 'tool_result') as { content: string; isError: boolean } | undefined;
+    expect(tr?.isError).toBe(true);
+    expect(tr?.content).toMatch(/unknown tool/i);
+    expect(out.at(-1)?.role).toBe('assistant');
+  });
+
+  it('stops after MAX_ROUNDS instead of looping forever when the provider keeps requesting tool calls', async () => {
+    await writeFile(join(dir, 'a.txt'), 'x');
+    const infiniteProvider: LLMProvider = {
+      name: 'infinite',
+      async *stream() {
+        yield { type: 'tool_use', id: 'tu', name: 'read_file', input: { path: 'a.txt' } };
+        yield { type: 'done', stopReason: 'tool_use' };
+      },
+    };
+    const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'keep going forever' }] }], {
+      provider: infiniteProvider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+    });
+    const last = out.at(-1)!;
+    expect(last.role).toBe('assistant');
+    expect(last.content.some((b) => b.type === 'text' && /stopped after 50/i.test(b.text))).toBe(true);
   });
 });
