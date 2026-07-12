@@ -1,6 +1,6 @@
 {
   "name": "mdd-cli",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -13,7 +13,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "MDD internal terminal coding assistant",
   "type": "module",
   "bin": {
     "mdd": "./dist/cli.js"
@@ -28,8 +28,7 @@
     "ink-text-input": "^6.0.0",
     "openai": "^6.46.0",
     "react": "^19.2.7",
-    "zod": "^4.4.3",
-    "zod-to-json-schema": "^3.25.2"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
@@ -39,5 +38,8 @@
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }
