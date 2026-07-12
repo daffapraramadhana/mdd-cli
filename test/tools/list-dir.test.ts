@@ -17,4 +17,8 @@ describe('list_dir', () => {
     expect(r.content).toContain('file.txt');
     expect(r.content).toContain('sub/');
   });
+  it('returns an error result (does not throw) on malformed input', async () => {
+    const r = await listDirTool.handler({ path: 123 }, { cwd: dir });
+    expect(r.isError).toBe(true);
+  });
 });

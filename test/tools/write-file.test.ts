@@ -17,4 +17,8 @@ describe('write_file', () => {
   it('is marked as mutating', () => {
     expect(writeFileTool.mutating).toBe(true);
   });
+  it('returns an error result (does not throw) on malformed input', async () => {
+    const r = await writeFileTool.handler({ path: 'a.txt' }, { cwd: dir });
+    expect(r.isError).toBe(true);
+  });
 });

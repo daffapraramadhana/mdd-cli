@@ -15,8 +15,8 @@ export const editFileTool: Tool = {
   inputSchema: schema,
   mutating: true,
   handler: async (input, ctx) => {
-    const { path, old_string, new_string } = schema.parse(input);
     try {
+      const { path, old_string, new_string } = schema.parse(input);
       const abs = resolve(ctx.cwd, path);
       const text = await readFile(abs, 'utf8');
       const first = text.indexOf(old_string);

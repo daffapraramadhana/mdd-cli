@@ -12,8 +12,8 @@ export const listDirTool: Tool = {
   inputSchema: schema,
   mutating: false,
   handler: async (input, ctx) => {
-    const { path } = schema.parse(input);
     try {
+      const { path } = schema.parse(input);
       const entries = await readdir(resolve(ctx.cwd, path), { withFileTypes: true });
       const lines = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).sort();
       return { content: truncate(lines.join('\n') || '(empty)'), isError: false };

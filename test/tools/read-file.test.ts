@@ -20,4 +20,8 @@ describe('read_file', () => {
     expect(r.isError).toBe(true);
     expect(r.content).toMatch(/ENOENT|not found|no such file/i);
   });
+  it('returns an error result (does not throw) on malformed input', async () => {
+    const r = await readFileTool.handler({}, { cwd: dir });
+    expect(r.isError).toBe(true);
+  });
 });

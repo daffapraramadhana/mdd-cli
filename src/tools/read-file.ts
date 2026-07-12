@@ -12,8 +12,8 @@ export const readFileTool: Tool = {
   inputSchema: schema,
   mutating: false,
   handler: async (input, ctx) => {
-    const { path } = schema.parse(input);
     try {
+      const { path } = schema.parse(input);
       const text = await readFile(resolve(ctx.cwd, path), 'utf8');
       return { content: truncate(text), isError: false };
     } catch (err) {

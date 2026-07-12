@@ -14,8 +14,8 @@ export const writeFileTool: Tool = {
   inputSchema: schema,
   mutating: true,
   handler: async (input, ctx) => {
-    const { path, content } = schema.parse(input);
     try {
+      const { path, content } = schema.parse(input);
       const abs = resolve(ctx.cwd, path);
       await mkdir(dirname(abs), { recursive: true });
       await writeFile(abs, content, 'utf8');

@@ -27,4 +27,8 @@ describe('edit_file', () => {
     expect(r.isError).toBe(true);
     expect(r.content).toMatch(/unique|multiple|more than once/i);
   });
+  it('returns an error result (does not throw) on malformed input', async () => {
+    const r = await editFileTool.handler({ path: 'a.txt', old_string: 'x' }, { cwd: dir });
+    expect(r.isError).toBe(true);
+  });
 });
