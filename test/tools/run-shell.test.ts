@@ -24,6 +24,10 @@ describe('run_shell', () => {
     // macOS resolves temp dirs through /private; assert the basename instead.
     expect(r.content).toContain(dir.split('/').pop()!);
   });
+  it('returns an error result for malformed input instead of throwing', async () => {
+    const r = await runShellTool.handler({}, { cwd: dir });
+    expect(r.isError).toBe(true);
+  });
 });
 
 describe('isDenied', () => {
