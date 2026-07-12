@@ -1,6 +1,7 @@
 // src/cli.ts
 import { createInterface } from 'node:readline/promises';
-import { pathToFileURL } from 'node:url';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { loadConfig, saveConfig, type Config } from './config/index.js';
 import { getProvider } from './providers/index.js';
@@ -131,6 +132,7 @@ async function main(): Promise<void> {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const invokedPath = process.argv[1] ? realpathSync(process.argv[1]) : '';
+if (invokedPath && fileURLToPath(import.meta.url) === invokedPath) {
   void main();
 }
