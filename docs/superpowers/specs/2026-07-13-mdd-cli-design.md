@@ -27,7 +27,6 @@ integrations (GitLab, Odoo) are explicitly deferred to v2.
 - GitLab tools, Odoo tools, or any write-actions to those systems (→ v2).
 - Central secrets service / Vault integration (→ later).
 - Multi-agent / subagents.
-- A rich TUI (v1 uses plain streamed text + readline prompts; ink is a later upgrade).
 - A hard filesystem jail (confirm-on-mutate is the practical safety net for v1).
 
 ## Decisions (from brainstorming)
@@ -109,10 +108,16 @@ Each unit has one job; listed as *does / how used / depends on*.
      without prompting. `--yes`/config can pre-approve (CI); default is prompt-on-mutate.
    - Depends on: terminal UI.
 
-7. **`ui/` — terminal rendering**
-   - Streams assistant text, renders tool-call activity ("↳ running: npm test"), shows
-     confirmation prompts, formats errors. v1 = plain streamed text + readline prompts.
-   - Depends on: `readline`/stdout.
+7. **`ui/` — terminal rendering (ink)**
+   - An [ink](https://github.com/vadimdemedes/ink) (React-in-the-terminal) app. A small
+     observable `UiStore` holds transcript + streaming state; the `<App>` component renders
+     it: committed transcript via `<Static>` (stable scrollback), the in-progress assistant
+     text in a live region, tool-call activity ("↳ read_file {...}"), a "…thinking"
+     indicator, and a `<TextInput>` for REPL input and permission answers.
+   - The agent loop stays UI-agnostic: it emits through `onText` / `onToolStart` callbacks
+     and a `prompt(message) → Promise<string>` function. The store implements those; ink is
+     purely a rendering swap behind that seam.
+   - Depends on: `ink`, `react`, `ink-text-input`.
 
 8. **`system-prompt.ts`** — mdd identity, cwd, OS, guidelines injected as the system prompt.
 
@@ -190,14 +195,18 @@ mdd-cli/
       read-file.ts  write-file.ts  edit-file.ts
       list-dir.ts  run-shell.ts  git.ts
     permissions/          # permission gate
-    ui/                   # terminal rendering
+    ui/
+      store.ts            # observable UiStore (transcript, streaming, prompts)
+      app.tsx             # ink <App> component
+      index.tsx           # mountApp() render helper
     system-prompt.ts
   test/                   # mirrors src/
   README.md               # install + usage for MDD engineers
 ```
 
-**Dependencies:** `@anthropic-ai/sdk`, `openai`, `commander`, `zod`. Dev: `vitest`,
-`typescript`, `tsup` (or `tsc`).
+**Dependencies:** `@anthropic-ai/sdk`, `openai`, `commander`, `zod`, `zod-to-json-schema`,
+`ink`, `react`, `ink-text-input`. Dev: `vitest`, `typescript`, `tsup`, `@types/react`,
+`ink-testing-library`.
 
 **Distribution:** internal npm (private registry or git install); `npm i -g` gives
 engineers the `mdd` binary. Built with `tsup`/`tsc`.
@@ -215,6 +224,9 @@ engineers the `mdd` binary. Built with `tsup`/`tsc`.
 - **End-to-end smoke tests (opt-in, real keys, not default CI):** `mdd "list files in this
   dir"` returns sensibly; a one-shot write round-trips through the permission gate with
   `--yes`.
+- **UI store test:** the observable `UiStore` is plain logic — assert streaming append/commit
+  and the `requestPrompt`/`resolvePrompt` promise handshake. The ink `<App>` is rendered with
+  `ink-testing-library` and asserted via `lastFrame()`.
 - **Framework:** `vitest`.
 
 ## Definition of Done (v1)
@@ -230,4 +242,4 @@ provider + mocked-loop tests.
   like MR/issue comments).
 - Odoo tools (read-only: customers, orders, inventory, invoices, reports; then safe writes).
 - Central secrets service (Vault/SSO) as an alternative to per-user local config.
-- Richer TUI (ink), subagents, additional providers.
+- Subagents, additional providers, richer ink views (diff panels, syntax highlighting).
