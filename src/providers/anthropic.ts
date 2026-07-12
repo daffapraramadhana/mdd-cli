@@ -41,7 +41,8 @@ export class AnthropicProvider implements LLMProvider {
       } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
         yield { type: 'text', text: ev.delta.text };
       } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'input_json_delta') {
-        for (const b of toolBuf.values()) b.json += ev.delta.partial_json;
+        const b = toolBuf.get(ev.index);
+        if (b) b.json += ev.delta.partial_json;
       } else if (ev.type === 'message_delta' && ev.delta?.stop_reason) {
         stopReason = ev.delta.stop_reason === 'tool_use' ? 'tool_use' : ev.delta.stop_reason === 'max_tokens' ? 'max_tokens' : 'end';
       }
