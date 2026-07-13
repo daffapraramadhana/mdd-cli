@@ -82,6 +82,11 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
   const [value, setValue] = useState('');
   const [tick, setTick] = useState(0);
   const pasteRef = useRef(createPasteState());
+  // Mirror of `value`, updated synchronously in onChange. ink-text-input's onSubmit hands us a
+  // stale `originalValue` for a render-window after we rewrite its controlled value (paste
+  // collapse), so we submit from this ref — the source of truth — not from that argument.
+  const valueRef = useRef('');
+  const setInput = (next: string): void => { valueRef.current = next; setValue(next); };
   const { stdout } = useStdout();
   const width = Math.max(8, (stdout?.columns ?? 80));
 
@@ -95,13 +100,15 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
     return () => clearInterval(t);
   }, [animating]);
 
-  const handleSubmit = (v: string) => {
-    if (state.pendingPrompt !== null) { setValue(''); pasteRef.current = createPasteState(); store.resolvePrompt(v); return; }
+  const handleSubmit = () => {
+    // Read the live value from the ref, not ink-text-input's (possibly stale) onSubmit argument.
+    const current = valueRef.current;
+    if (state.pendingPrompt !== null) { setInput(''); pasteRef.current = createPasteState(); store.resolvePrompt(current); return; }
     // A turn is running: keep the draft in the box (don't clear, don't send) until it's idle.
     if (state.status === 'busy') return;
-    const display = v.trim();
+    const display = current.trim();
     const map = pasteRef.current.map;
-    setValue('');
+    setInput('');
     pasteRef.current = createPasteState();
     if (display) onSubmit({ display, text: expandPastes(display, map) });
   };
@@ -158,9 +165,9 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
         <TextInput
           value={value}
           onChange={(next) => {
-            const r = applyChange(value, sanitizeInput(next), pasteRef.current, Date.now());
+            const r = applyChange(valueRef.current, sanitizeInput(next), pasteRef.current, Date.now());
             pasteRef.current = r.state;
-            setValue(r.value);
+            setInput(r.value);
           }}
           onSubmit={handleSubmit}
         />

@@ -150,6 +150,11 @@ describe('App', () => {
   // ink-testing-library's stdin.write() dispatches through Ink/React 19's async scheduler:
   // state updates from it are not observable in lastFrame() until the next event-loop tick.
   const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+  // Poll the frame until a condition holds (or give up), so a test submits only once the render
+  // has settled — mirroring a real user who types, sees the result, then presses Enter.
+  const waitForFrame = async (getFrame: () => string | undefined, pred: (f: string) => boolean, max = 200) => {
+    for (let i = 0; i < max; i++) { if (pred(getFrame() ?? '')) return; await tick(); }
+  };
 
   it('collapses a long multi-line paste into a chip in the input', async () => {
     const store = new UiStore();
@@ -184,5 +189,24 @@ describe('App', () => {
     expect(received!.display).toContain('[Pasted text #1');
     expect(received!.text).toContain('SENTINEL_LINE_15'); // model gets the full blob
     expect(received!.text).not.toContain('[Pasted text'); // no token leaks to the model
+  });
+
+  it('keeps text typed after a paste when submitting (no stale-value drop)', async () => {
+    const store = new UiStore();
+    let received: { display: string; text: string } | null = null;
+    const { lastFrame, stdin } = render(<App store={store} onSubmit={(input) => { received = input; }} />);
+    const blob = Array.from({ length: 30 }, (_, i) => `SENTINEL_LINE_${i}`).join('\n');
+    stdin.write(blob);
+    await waitForFrame(lastFrame, (f) => f.includes('[Pasted text #1'));
+    stdin.write(' please review this');
+    await waitForFrame(lastFrame, (f) => f.includes('[Pasted text #1') && f.includes('please review this'));
+    stdin.write('\r'); // Enter
+    await tick();
+    expect(received).not.toBeNull();
+    // The trailing typed text must survive the collapse — it was dropped before the valueRef fix.
+    expect(received!.display).toBe('[Pasted text #1 +30 lines] please review this');
+    expect(received!.text).toContain('SENTINEL_LINE_15');      // full blob to the model
+    expect(received!.text).toContain('please review this');     // and the trailing text
+    expect(received!.text).not.toContain('[Pasted text');       // token fully expanded
   });
 });
