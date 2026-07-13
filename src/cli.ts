@@ -148,15 +148,23 @@ function sessionMeta(providerName: string, model: string, cwd: string, autoAppro
   return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove, branch };
 }
 
-/** Per-turn streaming callbacks: strips <think> from text, tracks tool start/end, flush at end. */
-function streamHandlers(store: UiStore) {
+/** Per-turn streaming callbacks: splits <think> reasoning from answer text, tracks tools, flush at end. */
+export function streamHandlers(store: UiStore) {
   const splitter = new ThinkSplitter();
   return {
-    onText: (delta: string): void => { const v = splitter.push(delta); if (v) store.appendStreaming(v); },
+    onText: (delta: string): void => {
+      const { visible, thinking } = splitter.push(delta);
+      if (thinking) store.appendReasoning(thinking);
+      if (visible) store.appendStreaming(visible);
+    },
     onToolStart: (name: string, input: unknown): void => store.startTool(name, input),
     onToolEnd: (isError: boolean): void => store.endTool(isError ? 'error' : 'ok'),
     onUsage: (inTok: number, outTok: number): void => store.addUsage(inTok, outTok),
-    flush: (): void => { const rest = splitter.flush(); if (rest) store.appendStreaming(rest); },
+    flush: (): void => {
+      const { visible, thinking } = splitter.flush();
+      if (thinking) store.appendReasoning(thinking);
+      if (visible) store.appendStreaming(visible);
+    },
   };
 }
 
