@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Box, Text, Static, useStdout } from 'ink';
+import { Box, Text, Static, useStdout, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { sanitizeInput } from './scroll.js';
 import type { UiStore, TranscriptItem } from './store.js';
@@ -114,6 +114,13 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
     (t as { unref?: () => void }).unref?.();
     return () => clearInterval(t);
   }, [animating]);
+
+  // Esc interrupts an in-flight turn — but only when nothing else owns Esc (no select/prompt open).
+  useInput((_input, key) => {
+    if (key.escape && state.status === 'busy' && state.pendingSelect === null && state.pendingPrompt === null) {
+      store.requestAbort();
+    }
+  });
 
   const handleSubmit = () => {
     // Read the live value from the ref, not ink-text-input's (possibly stale) onSubmit argument.
