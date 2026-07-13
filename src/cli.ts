@@ -9,9 +9,12 @@ import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { UiStore, mountApp } from './ui/index.js';
+import { homedir } from 'node:os';
+import { UiStore, mountApp, formatBanner, shortenCwd, type SessionMeta } from './ui/index.js';
 import { formatModels } from './models.js';
 import type { Message } from './types.js';
+
+const VERSION = '0.1.0';
 
 interface RunOpts { provider?: 'anthropic' | 'openai'; model?: string; yes?: boolean; baseUrl?: string; }
 
@@ -57,12 +60,16 @@ async function authLogin(): Promise<void> {
   } finally { rl.close(); }
 }
 
+function sessionMeta(providerName: string, model: string, cwd: string, opts: RunOpts): SessionMeta {
+  return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove: !!opts.yes };
+}
+
 async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const { provider, model } = await resolveSetup(opts);
   const cwd = process.cwd();
   const store = new UiStore();
   const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
-  const app = mountApp(store, () => {});
+  const app = mountApp(store, () => {}, sessionMeta(provider.name, model, cwd, opts));
   store.addUser(prompt);
   store.setStatus('busy');
   const messages: Message[] = [{ role: 'user', content: [{ type: 'text', text: prompt }] }];
@@ -111,14 +118,15 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  const app = mountApp(store, (line) => { void onSubmit(line); });
+  process.stdout.write(formatBanner({ version: VERSION }) + '\n');
+  const app = mountApp(store, (line) => { void onSubmit(line); }, sessionMeta(provider.name, model, cwd, opts));
   await app.waitUntilExit();
 }
 
 async function main(): Promise<void> {
   const program = new Command();
   program.name('mdd').description('MDD internal terminal coding assistant');
-  program.version('0.1.0');
+  program.version(VERSION);
   program.option('--provider <name>', 'anthropic or openai');
   program.option('--model <name>', 'model id');
   program.option('--base-url <url>', 'OpenAI-compatible base URL (e.g. 9router at http://localhost:20128/v1)');
