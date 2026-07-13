@@ -30,3 +30,49 @@ export function formatToolCall(name: string, input: unknown): string {
   const short = oneLine.length > 60 ? oneLine.slice(0, 57) + '…' : oneLine;
   return `${name}(${short})`;
 }
+
+function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function firstLine(s: string, max = 58): string {
+  const line = s.split('\n').map((l) => l.trim()).find((l) => l !== '') ?? '';
+  return line.length > max ? line.slice(0, max - 1) + '…' : line;
+}
+
+/** One-line dim preview of a tool result, or undefined when there's nothing worth showing. */
+export function summarizePreview(name: string, content: string | undefined, isError: boolean): string | undefined {
+  if (content === undefined) return undefined;
+  if (isError) return firstLine(content) || undefined;
+
+  switch (name) {
+    case 'read_file': {
+      const lines = content.split('\n').length;
+      return `${lines} lines · ${humanBytes(Buffer.byteLength(content))}`;
+    }
+    case 'list_dir': {
+      if (content.trim() === '(empty)') return 'empty';
+      const n = content.split('\n').filter((l) => l.trim() !== '').length;
+      return `${n} entries`;
+    }
+    case 'search': {
+      if (content.trim() === '(no matches)') return 'no matches';
+      const n = content.split('\n').filter((l) => l.trim() !== '').length;
+      return `${n} matches`;
+    }
+    case 'write_file': {
+      const m = content.match(/Wrote (\d+) bytes/);
+      return m ? `wrote ${humanBytes(Number(m[1]))}` : firstLine(content) || undefined;
+    }
+    case 'multi_edit': {
+      const m = content.match(/Applied (\d+) edit/);
+      return m ? `${m[1]} edits` : firstLine(content) || undefined;
+    }
+    case 'edit_file':
+      return undefined;
+    default:
+      return firstLine(content) || undefined;
+  }
+}
