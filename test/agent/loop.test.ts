@@ -119,6 +119,21 @@ describe('runTurn', () => {
     expect(out.at(-1)?.role).toBe('assistant');
   });
 
+  it('passes the tool result content to onToolEnd', async () => {
+    await writeFile(join(dir, 'a.txt'), 'FILEBODY');
+    const seen: Array<{ isError: boolean; content?: string }> = [];
+    const provider = new FakeProvider([
+      [{ type: 'tool_use', id: 't1', name: 'read_file', input: { path: 'a.txt' } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'done' }, { type: 'done', stopReason: 'end' }],
+    ]);
+    await runTurn([{ role: 'user', content: [{ type: 'text', text: 'read' }] }], {
+      provider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+      onToolEnd: (isError, content) => seen.push({ isError, content }),
+    });
+    expect(seen).toEqual([{ isError: false, content: 'FILEBODY' }]);
+  });
+
   it('stops after MAX_ROUNDS instead of looping forever when the provider keeps requesting tool calls', async () => {
     await writeFile(join(dir, 'a.txt'), 'x');
     const infiniteProvider: LLMProvider = {

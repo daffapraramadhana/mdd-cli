@@ -154,7 +154,7 @@ function streamHandlers(store: UiStore) {
   return {
     onText: (delta: string): void => { const v = splitter.push(delta); if (v) store.appendStreaming(v); },
     onToolStart: (name: string, input: unknown): void => store.startTool(name, input),
-    onToolEnd: (isError: boolean): void => store.endTool(isError ? 'error' : 'ok'),
+    onToolEnd: (isError: boolean, content?: string): void => store.endTool(isError ? 'error' : 'ok', content),
     onUsage: (inTok: number, outTok: number): void => store.addUsage(inTok, outTok),
     flush: (): void => { const rest = splitter.flush(); if (rest) store.appendStreaming(rest); },
   };
