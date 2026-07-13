@@ -6,8 +6,12 @@ import { writeFileTool } from './write-file.js';
 import { editFileTool } from './edit-file.js';
 import { runShellTool } from './run-shell.js';
 import { gitTool } from './git.js';
+import { searchTool } from './search.js';
+import { multiEditTool } from './multi-edit.js';
 
-export const allTools: Tool[] = [readFileTool, listDirTool, writeFileTool, editFileTool, runShellTool, gitTool];
+export const allTools: Tool[] = [
+  readFileTool, listDirTool, searchTool, writeFileTool, editFileTool, multiEditTool, runShellTool, gitTool,
+];
 
 export function buildRegistry(): ToolRegistry {
   const r = new ToolRegistry();
