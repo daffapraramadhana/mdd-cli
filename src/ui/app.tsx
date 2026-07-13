@@ -129,7 +129,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
     if (display) onSubmit({ display, text, imagePaths });
   };
 
-  const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool;
+  const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool && !state.reasoning;
   const meta = state.meta;
 
   let userNum = 0;

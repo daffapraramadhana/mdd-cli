@@ -263,4 +263,16 @@ describe('App', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('Thought for 2.3s');
   });
+
+  it('does not render the plain thinking placeholder while reasoning streams', () => {
+    const store = new UiStore();
+    store.setStatus('busy');
+    store.appendReasoning('weighing the options');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('✻ Thinking'); // the reasoning block shows
+    // the pre-existing lowercase 'thinking' placeholder must NOT also show
+    const plain = frame.split('\n').filter((l) => /(^|\s)thinking(\.|\s|$)/.test(l) && !l.includes('✻'));
+    expect(plain).toEqual([]);
+  });
 });
