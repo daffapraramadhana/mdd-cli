@@ -55,7 +55,7 @@ export function applyChange(
 
   // Coalesce with the previous paste if it is recent and its token is still in the value.
   if (state.lastNum > 0 && now - state.lastAt <= PASTE_COALESCE_MS && tokenRegex(state.lastNum).test(prev)) {
-    const combined = (state.map.get(state.lastNum) ?? '') + '\n' + d.inserted;
+    const combined = (state.map.get(state.lastNum) ?? '') + d.inserted;
     const map = new Map(state.map);
     map.set(state.lastNum, combined);
     const value = prev.replace(tokenRegex(state.lastNum), pasteLabel(state.lastNum, combined));

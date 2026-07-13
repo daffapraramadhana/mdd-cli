@@ -68,8 +68,8 @@ describe('applyChange', () => {
   it('coalesces a second long insert within the window into #1', () => {
     const a = applyChange('', lines(10), createPasteState(), 1000);
     const b = applyChange(a.value, a.value + lines(10), a.state, 1000 + 5);
-    expect(b.value).toBe('[Pasted text #1 +20 lines]');
-    expect(b.state.map.get(1)).toBe(lines(10) + '\n' + lines(10));
+    expect(b.value).toBe('[Pasted text #1 +19 lines]');
+    expect(b.state.map.get(1)).toBe(lines(10) + lines(10));
     expect(b.state.count).toBe(1);
   });
 });
