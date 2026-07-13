@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import { loadConfig, saveConfig, configDir, type Config } from './config/index.js';
 import { SessionStore, makeSessionId, truncateTitle, type SessionRecord, type SessionSummary } from './session.js';
+import { readFileSync } from 'node:fs';
+import { attachImages } from './ui/attach.js';
+import type { ContentBlock } from './types.js';
 import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
@@ -357,11 +360,18 @@ async function repl(opts: RunOpts): Promise<void> {
       handleReplCommand(input.display, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit });
       return;
     }
+    const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
+    for (const err of errors) store.addSystem(`⚠ ${err}`);
+    if (!input.text && !blocks.length) { return; } // every image failed and no text — nothing to send
     running = true;
     store.addUser(input.display);
     if (!title) title = truncateTitle(input.display);
     store.setStatus('busy');
-    messages.push({ role: 'user', content: [{ type: 'text', text: input.text }] });
+    const content: ContentBlock[] = [
+      ...(input.text ? [{ type: 'text' as const, text: input.text }] : []),
+      ...blocks,
+    ];
+    messages.push({ role: 'user', content });
     const h = streamHandlers(store);
     try {
       await runTurn(messages, {

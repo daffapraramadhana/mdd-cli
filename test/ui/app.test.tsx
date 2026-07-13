@@ -2,6 +2,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import { App } from '../../src/ui/app.js';
 import { UiStore } from '../../src/ui/store.js';
+import { writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 afterEach(() => {
   cleanup();
@@ -208,5 +211,28 @@ describe('App', () => {
     expect(received!.text).toContain('SENTINEL_LINE_15');      // full blob to the model
     expect(received!.text).toContain('please review this');     // and the trailing text
     expect(received!.text).not.toContain('[Pasted text');       // token fully expanded
+  });
+
+  it('collapses a dragged image path into a chip and submits its path', async () => {
+    const imgPath = join(tmpdir(), `mdd-attach-${process.pid}.png`);
+    writeFileSync(imgPath, Buffer.from([137, 80, 78, 71])); // PNG magic bytes; content irrelevant
+    try {
+      const store = new UiStore();
+      let received: { display: string; text: string; imagePaths: string[] } | null = null;
+      const { lastFrame, stdin } = render(<App store={store} onSubmit={(input) => { received = input; }} />);
+      stdin.write(imgPath); // whole-path chunk, as a drag/paste delivers it
+      await waitForFrame(lastFrame, (f) => f.includes('[Image #1:'));
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('[Image #1:');
+      expect(frame).not.toContain(imgPath); // raw path hidden behind the chip
+      stdin.write('\r');
+      await tick();
+      expect(received).not.toBeNull();
+      expect(received!.display).toContain('[Image #1:');
+      expect(received!.imagePaths).toEqual([imgPath]);
+      expect(received!.text).not.toContain('[Image #1:'); // image token stripped from model text
+    } finally {
+      rmSync(imgPath, { force: true });
+    }
   });
 });

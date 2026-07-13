@@ -14,6 +14,9 @@ import { Header } from './header.js';
 import { VERSION } from '../version.js';
 import { formatUsage } from '../usage.js';
 import { createPasteState, applyChange, expandPastes } from './paste.js';
+import { createAttachState, detectImageInsert, imageLabel, stripImageTokens } from './attach.js';
+import { statSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const GUTTER = 5;
 const HINTS = '/model  /resume  /theme  /help  /exit';
@@ -75,13 +78,14 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
 // selectable), while the live streaming region, input, and status bar re-render in place at
 // the bottom. `showHeader` prints the banner once as the first Static item so it sits at the
 // top of scrollback (like Claude Code) instead of being frozen in an alternate screen.
-export interface SubmitInput { display: string; text: string }
+export interface SubmitInput { display: string; text: string; imagePaths: string[] }
 
 export function App({ store, onSubmit, showHeader = false }: { store: UiStore; onSubmit: (input: SubmitInput) => void; showHeader?: boolean }) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
   const [tick, setTick] = useState(0);
   const pasteRef = useRef(createPasteState());
+  const attachRef = useRef(createAttachState());
   // Mirror of `value`, updated synchronously in onChange. ink-text-input's onSubmit hands us a
   // stale `originalValue` for a render-window after we rewrite its controlled value (paste
   // collapse), so we submit from this ref — the source of truth — not from that argument.
@@ -103,14 +107,18 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
   const handleSubmit = () => {
     // Read the live value from the ref, not ink-text-input's (possibly stale) onSubmit argument.
     const current = valueRef.current;
-    if (state.pendingPrompt !== null) { setInput(''); pasteRef.current = createPasteState(); store.resolvePrompt(current); return; }
+    if (state.pendingPrompt !== null) { setInput(''); pasteRef.current = createPasteState(); attachRef.current = createAttachState(); store.resolvePrompt(current); return; }
     // A turn is running: keep the draft in the box (don't clear, don't send) until it's idle.
     if (state.status === 'busy') return;
     const display = current.trim();
-    const map = pasteRef.current.map;
+    const pasteMap = pasteRef.current.map;
+    const imagePaths = [...attachRef.current.map.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
     setInput('');
     pasteRef.current = createPasteState();
-    if (display) onSubmit({ display, text: expandPastes(display, map) });
+    attachRef.current = createAttachState();
+    // Model text: expand paste chips to full text, remove image chips (images ride as separate blocks).
+    const text = stripImageTokens(expandPastes(display, pasteMap)).trim();
+    if (display) onSubmit({ display, text, imagePaths });
   };
 
   const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool;
@@ -165,8 +173,23 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
         <TextInput
           value={value}
           onChange={(next) => {
-            const r = applyChange(valueRef.current, sanitizeInput(next), pasteRef.current, Date.now());
+            const prev = valueRef.current;
+            const r = applyChange(prev, sanitizeInput(next), pasteRef.current, Date.now());
             pasteRef.current = r.state;
+            // Image attach: if the just-inserted chunk is an existing image file, collapse it to a chip.
+            const cand = detectImageInsert(prev, r.value);
+            if (cand) {
+              const abs = resolve(process.cwd(), cand.path);
+              let exists = false;
+              try { exists = statSync(abs).isFile(); } catch { exists = false; }
+              if (exists) {
+                const n = attachRef.current.count + 1;
+                const nextMap = new Map(attachRef.current.map); nextMap.set(n, abs);
+                attachRef.current = { map: nextMap, count: n };
+                setInput(r.value.slice(0, cand.at) + imageLabel(n, abs) + r.value.slice(cand.at + cand.len));
+                return;
+              }
+            }
             setInput(r.value);
           }}
           onSubmit={handleSubmit}

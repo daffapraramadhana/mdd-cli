@@ -84,3 +84,32 @@ describe('OpenAIProvider', () => {
     expect(seenBaseURL).toBeUndefined();
   });
 });
+
+import { toOpenAIMessages } from '../../src/providers/openai.js';
+import type { Message } from '../../src/types.js';
+
+describe('toOpenAIMessages image mapping', () => {
+  it('builds an array content with an image_url data URL when images are present', () => {
+    const messages: Message[] = [{
+      role: 'user',
+      content: [
+        { type: 'text', text: 'what is this?' },
+        { type: 'image', mediaType: 'image/jpeg', data: 'QUJD' },
+      ],
+    }];
+    const out = toOpenAIMessages(messages, 'sys');
+    expect(out[0]).toEqual({ role: 'system', content: 'sys' });
+    expect(out[1]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'what is this?' },
+        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,QUJD' } },
+      ],
+    });
+  });
+
+  it('keeps a plain string content for text-only user messages', () => {
+    const out = toOpenAIMessages([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }], 'sys');
+    expect(out[1]).toEqual({ role: 'user', content: 'hi' });
+  });
+});
