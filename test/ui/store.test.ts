@@ -96,4 +96,16 @@ describe('UiStore', () => {
     s.setMeta({ provider: 'openai', model: 'cc/claude-opus-4-8', cwd: '~/p', branch: 'main' });
     expect(s.getState().meta).toMatchObject({ provider: 'openai', model: 'cc/claude-opus-4-8', branch: 'main' });
   });
+
+  it('loadTranscript replaces the transcript wholesale and clears streaming', () => {
+    const s = new UiStore();
+    s.appendStreaming('x');
+    s.addUser('old');
+    s.loadTranscript([{ kind: 'user', text: 'hi' }, { kind: 'assistant', text: 'restored' }]);
+    expect(s.getState().transcript).toEqual([
+      { kind: 'user', text: 'hi' },
+      { kind: 'assistant', text: 'restored' },
+    ]);
+    expect(s.getState().streaming).toBe('');
+  });
 });

@@ -104,6 +104,11 @@ export class UiStore {
     this.set({ transcript: [...this.state.transcript, { kind: 'system', text }] });
   };
 
+  // Restore a saved conversation: replace the transcript wholesale, drop any in-flight streaming.
+  loadTranscript = (items: TranscriptItem[]): void => {
+    this.set({ transcript: items, streaming: '' });
+  };
+
   setStatus = (status: 'idle' | 'busy'): void => { this.set({ status }); };
 
   setMeta = (meta: SessionMeta): void => { this.set({ meta }); };
