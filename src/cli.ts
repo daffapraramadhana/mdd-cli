@@ -125,6 +125,7 @@ function streamHandlers(store: UiStore) {
     onText: (delta: string): void => { const v = splitter.push(delta); if (v) store.appendStreaming(v); },
     onToolStart: (name: string, input: unknown): void => store.startTool(name, input),
     onToolEnd: (isError: boolean): void => store.endTool(isError ? 'error' : 'ok'),
+    onUsage: (inTok: number, outTok: number): void => store.addUsage(inTok, outTok),
     flush: (): void => { const rest = splitter.flush(); if (rest) store.appendStreaming(rest); },
   };
 }
@@ -145,7 +146,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
     await runTurn(messages, {
       provider, registry: buildRegistry(), gate, cwd, model,
       systemPrompt: buildSystemPrompt(cwd),
-      onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd,
+      onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
     });
     h.flush();
   } catch (err) {
@@ -298,7 +299,7 @@ async function repl(opts: RunOpts): Promise<void> {
     try {
       await runTurn(messages, {
         provider: session.provider, registry, gate, cwd, model: session.model, systemPrompt,
-        onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd,
+        onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
       });
       h.flush();
     } catch (err) {

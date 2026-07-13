@@ -33,23 +33,29 @@ export class AnthropicProvider implements LLMProvider {
     }, { signal: opts.signal });
 
     let stopReason: 'end' | 'tool_use' | 'max_tokens' = 'end';
+    let inputTokens = 0;
+    let outputTokens = 0;
     const toolBuf = new Map<number, { id: string; name: string; json: string }>();
 
     for await (const ev of stream as AsyncIterable<Record<string, any>>) {
-      if (ev.type === 'content_block_start' && ev.content_block?.type === 'tool_use') {
+      if (ev.type === 'message_start') {
+        inputTokens = ev.message?.usage?.input_tokens ?? 0;
+      } else if (ev.type === 'content_block_start' && ev.content_block?.type === 'tool_use') {
         toolBuf.set(ev.index ?? 0, { id: ev.content_block.id, name: ev.content_block.name, json: '' });
       } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
         yield { type: 'text', text: ev.delta.text };
       } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'input_json_delta') {
         const b = toolBuf.get(ev.index);
         if (b) b.json += ev.delta.partial_json;
-      } else if (ev.type === 'message_delta' && ev.delta?.stop_reason) {
-        stopReason = ev.delta.stop_reason === 'tool_use' ? 'tool_use' : ev.delta.stop_reason === 'max_tokens' ? 'max_tokens' : 'end';
+      } else if (ev.type === 'message_delta') {
+        if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason === 'tool_use' ? 'tool_use' : ev.delta.stop_reason === 'max_tokens' ? 'max_tokens' : 'end';
+        if (ev.usage?.output_tokens != null) outputTokens = ev.usage.output_tokens;
       }
     }
     for (const b of toolBuf.values()) {
       yield { type: 'tool_use', id: b.id, name: b.name, input: b.json ? JSON.parse(b.json) : {} };
     }
+    if (inputTokens || outputTokens) yield { type: 'usage', inputTokens, outputTokens };
     yield { type: 'done', stopReason };
   }
 }

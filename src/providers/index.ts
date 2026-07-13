@@ -4,6 +4,7 @@ import type { ToolSchema } from '../tools/types.js';
 export type ProviderEvent =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'usage'; inputTokens: number; outputTokens: number }
   | { type: 'done'; stopReason: 'end' | 'tool_use' | 'max_tokens' };
 
 export interface StreamOptions { model: string; systemPrompt: string; maxTokens: number; signal?: AbortSignal; }

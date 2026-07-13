@@ -3,6 +3,7 @@ import { App } from './app.js';
 import { UiStore } from './store.js';
 import { getTheme } from './theme.js';
 import { renderTranscriptText } from './transcript-text.js';
+import { formatUsage } from '../usage.js';
 
 export { UiStore } from './store.js';
 export type { TranscriptItem, UiState } from './store.js';
@@ -29,9 +30,13 @@ export function mountFullscreen(store: UiStore, onSubmit: (line: string) => void
     if (cleaned) return;
     cleaned = true;
     process.stdout.write(ALT_LEAVE);
-    const { transcript, themeName } = store.getState();
+    const { transcript, themeName, usage, meta } = store.getState();
     if (transcript.length) {
-      process.stdout.write(renderTranscriptText(transcript, getTheme(themeName)) + '\n');
+      let out = renderTranscriptText(transcript, getTheme(themeName));
+      if (usage.inputTokens + usage.outputTokens > 0) {
+        out += `\n\x1b[2m${formatUsage(usage, meta?.model ?? '')}\x1b[0m`;
+      }
+      process.stdout.write(out + '\n');
     }
   };
   process.on('exit', cleanup);

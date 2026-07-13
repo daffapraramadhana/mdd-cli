@@ -19,12 +19,13 @@ export interface UiState {
   activeTool: ActiveTool | null;
   themeName: string;
   pendingSelect: PendingSelect | null;
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 export class UiStore {
   private state: UiState = {
     transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
-    themeName: 'neon', pendingSelect: null,
+    themeName: 'neon', pendingSelect: null, usage: { inputTokens: 0, outputTokens: 0 },
   };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
@@ -78,6 +79,15 @@ export class UiStore {
   };
 
   setTheme = (themeName: string): void => { this.set({ themeName }); };
+
+  addUsage = (inputTokens: number, outputTokens: number): void => {
+    this.set({
+      usage: {
+        inputTokens: this.state.usage.inputTokens + inputTokens,
+        outputTokens: this.state.usage.outputTokens + outputTokens,
+      },
+    });
+  };
 
   // Interactive picker: returns the chosen option, or null if cancelled (Esc).
   requestSelect = (title: string, options: string[]): Promise<string | null> =>

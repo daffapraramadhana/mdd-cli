@@ -11,6 +11,7 @@ import { spinnerFrame, thinkingDots, cursorFrame } from './spinner.js';
 import { SelectList } from './select.js';
 import { Header } from './header.js';
 import { VERSION } from '../version.js';
+import { formatUsage } from '../usage.js';
 
 const GUTTER = 5;
 const HINTS = '/model  /theme  /help  /exit';
@@ -160,6 +161,9 @@ export function App({ store, onSubmit, fullscreen = false }: { store: UiStore; o
         <Text color={theme.accent} bold>mdd</Text>
         <Text>{'  '}</Text>
         <Text dimColor>{formatStatus(meta)}</Text>
+        {state.usage.inputTokens + state.usage.outputTokens > 0
+          ? <Text dimColor>{`  · ${formatUsage(state.usage, meta.model)}`}</Text>
+          : null}
         {scrollBack > 0 ? <Text dimColor>{`  ▲ ${scrollBack} up (PgDn to follow)`}</Text> : null}
       </Text>
       <Text dimColor>{`${HINTS}    ${formatPath(meta)} · ctrl-c exit`}</Text>

@@ -7,11 +7,12 @@ function fakeClient() {
   return {
     messages: {
       async *stream() {
+        yield { type: 'message_start', message: { usage: { input_tokens: 120, output_tokens: 0 } } };
         yield { type: 'content_block_start', content_block: { type: 'text' } };
         yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hi' } };
         yield { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tu_1', name: 'read_file' } };
         yield { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"path":"a"}' } };
-        yield { type: 'message_delta', delta: { stop_reason: 'tool_use' } };
+        yield { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 34 } };
       },
     },
   };
@@ -46,6 +47,7 @@ describe('AnthropicProvider', () => {
     );
     expect(events).toContainEqual({ type: 'text', text: 'hi' });
     expect(events).toContainEqual({ type: 'tool_use', id: 'tu_1', name: 'read_file', input: { path: 'a' } });
+    expect(events).toContainEqual({ type: 'usage', inputTokens: 120, outputTokens: 34 });
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'tool_use' });
   });
 

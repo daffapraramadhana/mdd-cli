@@ -15,6 +15,7 @@ export interface AgentDeps {
   onText?: (t: string) => void;
   onToolStart?: (name: string, input: unknown) => void;
   onToolEnd?: (isError: boolean) => void;
+  onUsage?: (inputTokens: number, outputTokens: number) => void;
   signal?: AbortSignal;
 }
 
@@ -30,6 +31,7 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
     })) {
       if (ev.type === 'text') { text += ev.text; deps.onText?.(ev.text); }
       else if (ev.type === 'tool_use') { const b: ToolUseBlock = { type: 'tool_use', id: ev.id, name: ev.name, input: ev.input }; toolUses.push(b); }
+      else if (ev.type === 'usage') deps.onUsage?.(ev.inputTokens, ev.outputTokens);
       else if (ev.type === 'done') stop = ev.stopReason;
     }
 

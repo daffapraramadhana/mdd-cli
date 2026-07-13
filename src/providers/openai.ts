@@ -44,12 +44,19 @@ export class OpenAIProvider implements LLMProvider {
       max_completion_tokens: opts.maxTokens,
       messages: toOpenAIMessages(messages, opts.systemPrompt),
       tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })),
+      stream_options: { include_usage: true }, // ask for token counts in the final chunk
     }, { signal: opts.signal });
 
     let stopReason: 'end' | 'tool_use' | 'max_tokens' = 'end';
+    let inputTokens = 0;
+    let outputTokens = 0;
     const calls = new Map<number, { id: string; name: string; args: string }>();
 
     for await (const chunk of stream as AsyncIterable<Record<string, any>>) {
+      if (chunk.usage) {
+        inputTokens = chunk.usage.prompt_tokens ?? 0;
+        outputTokens = chunk.usage.completion_tokens ?? 0;
+      }
       const choice = chunk.choices?.[0];
       if (!choice) continue;
       if (choice.delta?.content) yield { type: 'text', text: choice.delta.content };
@@ -67,6 +74,7 @@ export class OpenAIProvider implements LLMProvider {
     for (const c of calls.values()) {
       yield { type: 'tool_use', id: c.id, name: c.name, input: c.args ? JSON.parse(c.args) : {} };
     }
+    if (inputTokens || outputTokens) yield { type: 'usage', inputTokens, outputTokens };
     yield { type: 'done', stopReason };
   }
 }

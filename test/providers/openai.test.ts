@@ -11,6 +11,7 @@ function fakeClient() {
           yield { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'read_file', arguments: '{"path":' } }] }, finish_reason: null }] };
           yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"a"}' } }] }, finish_reason: null }] };
           yield { choices: [{ delta: {}, finish_reason: 'tool_calls' }] };
+          yield { choices: [], usage: { prompt_tokens: 200, completion_tokens: 12 } }; // final usage chunk
         },
       },
     },
@@ -45,6 +46,7 @@ describe('OpenAIProvider', () => {
     );
     expect(events).toContainEqual({ type: 'text', text: 'hi' });
     expect(events).toContainEqual({ type: 'tool_use', id: 'call_1', name: 'read_file', input: { path: 'a' } });
+    expect(events).toContainEqual({ type: 'usage', inputTokens: 200, outputTokens: 12 });
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'tool_use' });
   });
 

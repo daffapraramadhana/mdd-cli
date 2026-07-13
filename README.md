@@ -9,8 +9,9 @@ runs shell/git, and streams its work in a polished terminal UI — multi-provide
 
 **Features**
 
-- 🤖 Agentic loop — reads/edits files and runs shell & git to complete tasks
+- 🤖 Agentic loop — reads, searches, edits files and runs shell & git to complete tasks
 - 🔌 Multi-provider — Anthropic, OpenAI, or any OpenAI-compatible endpoint (9router)
+- 📊 Live token + estimated-cost meter in the status bar
 - 🖥️ Fullscreen TUI — gradient header, live tool status & timing, markdown replies, themes
 - 🔒 Safe by default — every file/shell/git change asks for confirmation first
 - ⚡ Switch on the fly — `/model`, `/provider`, `/theme` without restarting

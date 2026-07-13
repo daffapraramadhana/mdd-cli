@@ -60,6 +60,14 @@ describe('UiStore', () => {
     expect(calls).toBe(1);
   });
 
+  it('accumulates token usage across turns', () => {
+    const s = new UiStore();
+    expect(s.getState().usage).toEqual({ inputTokens: 0, outputTokens: 0 });
+    s.addUsage(100, 20);
+    s.addUsage(50, 10);
+    expect(s.getState().usage).toEqual({ inputTokens: 150, outputTokens: 30 });
+  });
+
   it('adds a system item to the transcript', () => {
     const s = new UiStore();
     s.addSystem('→ model set to gpt-5');
