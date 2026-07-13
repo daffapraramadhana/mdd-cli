@@ -158,7 +158,7 @@ export function streamHandlers(store: UiStore) {
       if (visible) store.appendStreaming(visible);
     },
     onToolStart: (name: string, input: unknown): void => store.startTool(name, input),
-    onToolEnd: (isError: boolean): void => store.endTool(isError ? 'error' : 'ok'),
+    onToolEnd: (isError: boolean, content?: string): void => store.endTool(isError ? 'error' : 'ok', content),
     onUsage: (inTok: number, outTok: number): void => store.addUsage(inTok, outTok),
     flush: (): void => {
       const { visible, thinking } = splitter.flush();
@@ -375,6 +375,9 @@ async function repl(opts: RunOpts): Promise<void> {
     store.addUser(input.display);
     if (!title) title = truncateTitle(input.display);
     store.setStatus('busy');
+    const controller = new AbortController();
+    let interrupted = false;
+    store.setAbort(() => { interrupted = true; controller.abort(); });
     const content: ContentBlock[] = [
       ...(input.text ? [{ type: 'text' as const, text: input.text }] : []),
       ...blocks,
@@ -385,11 +388,14 @@ async function repl(opts: RunOpts): Promise<void> {
       await runTurn(messages, {
         provider: session.provider, registry, gate, cwd, model: session.model, systemPrompt,
         onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
+        signal: controller.signal,
       });
       h.flush();
     } catch (err) {
-      store.appendStreaming(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
+      if (interrupted) { store.commitStreaming(); store.addSystem('⊘ interrupted'); }
+      else store.appendStreaming(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
     } finally {
+      store.setAbort(null);
       store.commitStreaming();
       store.setStatus('idle');
       running = false;

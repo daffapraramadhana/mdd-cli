@@ -23,8 +23,6 @@ doc at `2026-07-14-streaming-thinking-design.md`).
   `highlight.ts`). Not touched here.
 - A full transcript redesign. We keep the `<Static>` history + pinned live region
   architecture in `app.tsx` intact.
-- Persisting tool result previews into saved sessions (previews are ephemeral, live-only;
-  see "Session persistence" below).
 
 ---
 
@@ -157,10 +155,12 @@ Keep it conservative — this is polish, not a redesign; it must not fight the e
 
 ## Session persistence
 
-Tool result previews are **live-only** and not persisted. On `/resume`, restored tool
-items simply render without a preview line (the `preview?` field is absent). This avoids
-bloating saved sessions and keeps `loadTranscript` unchanged. Acceptable: previews are a
-during-the-turn affordance, not history.
+Tool result previews are **persisted** as part of the saved transcript. The `preview?`
+field lives on the tool transcript item, so `sessions.save` writes it out with everything
+else and `/resume` restores it — resumed tool lines render the same dim preview line as a
+live turn, keeping resumed history exactly as legible as the original session. The size
+cost is one short summary string per tool call, which is negligible next to the rest of
+the transcript.
 
 ## Testing
 

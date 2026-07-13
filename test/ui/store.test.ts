@@ -167,4 +167,43 @@ describe('UiStore', () => {
     s.commitStreaming();
     expect(s.getState().transcript).toEqual([{ kind: 'assistant', text: 'just an answer' }]);
   });
+
+  it('attaches a summarized preview to the committed tool item', () => {
+    let t = 0;
+    const s = new UiStore(() => t);
+    s.startTool('list_dir', { path: '.' });
+    t = 5;
+    s.endTool('ok', 'a.ts\nb.ts');
+    const item = s.getState().transcript.at(-1);
+    expect(item).toEqual({ kind: 'tool', name: 'list_dir', input: { path: '.' }, status: 'ok', durationMs: 5, preview: '2 entries' });
+  });
+
+  it('omits preview when the summary is undefined', () => {
+    const s = new UiStore(() => 0);
+    s.startTool('edit_file', { path: 'a.ts' });
+    s.endTool('ok', 'Edited a.ts');
+    const item = s.getState().transcript.at(-1) as Record<string, unknown>;
+    expect('preview' in item).toBe(false);
+  });
+
+  it('stamps turnStartedAt on busy and clears it on idle', () => {
+    let t = 100;
+    const s = new UiStore(() => t);
+    expect(s.getState().turnStartedAt).toBeNull();
+    s.setStatus('busy');
+    expect(s.getState().turnStartedAt).toBe(100);
+    s.setStatus('idle');
+    expect(s.getState().turnStartedAt).toBeNull();
+  });
+
+  it('invokes the registered abort hook on requestAbort', () => {
+    const s = new UiStore();
+    let aborted = 0;
+    s.setAbort(() => { aborted += 1; });
+    s.requestAbort();
+    expect(aborted).toBe(1);
+    s.setAbort(null);
+    s.requestAbort(); // no hook -> no throw, no increment
+    expect(aborted).toBe(1);
+  });
 });
