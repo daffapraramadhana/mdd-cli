@@ -39,7 +39,7 @@ function fakeClientTwoTools() {
 
 describe('OpenAIProvider', () => {
   it('translates OpenAI streaming chunks into neutral events', async () => {
-    const p = new OpenAIProvider('sk-test', () => fakeClient() as never);
+    const p = new OpenAIProvider('sk-test', undefined, () => fakeClient() as never);
     const events = await collect(
       p.stream([{ role: 'user', content: [{ type: 'text', text: 'go' }] }], [], { model: 'gpt-5', systemPrompt: 's', maxTokens: 100 })
     );
@@ -49,7 +49,7 @@ describe('OpenAIProvider', () => {
   });
 
   it('routes tool_calls deltas to the matching index for parallel tool calls', async () => {
-    const p = new OpenAIProvider('sk-test', () => fakeClientTwoTools() as never);
+    const p = new OpenAIProvider('sk-test', undefined, () => fakeClientTwoTools() as never);
     const events = await collect(
       p.stream([{ role: 'user', content: [{ type: 'text', text: 'go' }] }], [], { model: 'gpt-5', systemPrompt: 's', maxTokens: 100 })
     );
@@ -59,5 +59,26 @@ describe('OpenAIProvider', () => {
       { type: 'tool_use', id: 'call_b', name: 'read_file', input: { path: 'b' } },
     ]);
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'tool_use' });
+  });
+
+  it('passes a custom base URL (e.g. 9router) to the OpenAI client factory', () => {
+    let seenKey: string | undefined;
+    let seenBaseURL: string | undefined;
+    new OpenAIProvider('sk-9r', 'http://localhost:20128/v1', (k, b) => {
+      seenKey = k;
+      seenBaseURL = b;
+      return fakeClient() as never;
+    });
+    expect(seenKey).toBe('sk-9r');
+    expect(seenBaseURL).toBe('http://localhost:20128/v1');
+  });
+
+  it('leaves base URL undefined when none is provided (SDK falls back to env/default)', () => {
+    let seenBaseURL: string | undefined = 'sentinel';
+    new OpenAIProvider('sk-test', undefined, (_k, b) => {
+      seenBaseURL = b;
+      return fakeClient() as never;
+    });
+    expect(seenBaseURL).toBeUndefined();
   });
 });

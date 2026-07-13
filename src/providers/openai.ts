@@ -3,7 +3,7 @@ import type { LLMProvider, ProviderEvent, StreamOptions } from './index.js';
 import type { Message } from '../types.js';
 import type { ToolSchema } from '../tools/types.js';
 
-type ClientFactory = (apiKey: string) => OpenAI;
+type ClientFactory = (apiKey: string, baseURL?: string) => OpenAI;
 
 function toOpenAIMessages(messages: Message[], systemPrompt: string): OpenAI.Chat.ChatCompletionMessageParam[] {
   const out: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }];
@@ -30,8 +30,12 @@ function toOpenAIMessages(messages: Message[], systemPrompt: string): OpenAI.Cha
 export class OpenAIProvider implements LLMProvider {
   name = 'openai';
   private client: OpenAI;
-  constructor(apiKey: string, factory: ClientFactory = (k) => new OpenAI({ apiKey: k })) {
-    this.client = factory(apiKey);
+  constructor(
+    apiKey: string,
+    baseURL?: string,
+    factory: ClientFactory = (k, b) => new OpenAI({ apiKey: k, baseURL: b }),
+  ) {
+    this.client = factory(apiKey, baseURL);
   }
 
   async *stream(messages: Message[], tools: ToolSchema[], opts: StreamOptions): AsyncIterable<ProviderEvent> {

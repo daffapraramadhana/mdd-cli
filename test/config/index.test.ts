@@ -6,7 +6,7 @@ import { loadConfig, saveConfig, configPath } from '../../src/config/index.js';
 
 let dir: string;
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'mdd-')); process.env.MDD_CONFIG_DIR = dir; });
-afterEach(async () => { delete process.env.MDD_CONFIG_DIR; delete process.env.ANTHROPIC_API_KEY; await rm(dir, { recursive: true, force: true }); });
+afterEach(async () => { delete process.env.MDD_CONFIG_DIR; delete process.env.ANTHROPIC_API_KEY; delete process.env.OPENAI_BASE_URL; await rm(dir, { recursive: true, force: true }); });
 
 describe('config', () => {
   it('returns defaults when no file exists', async () => {
@@ -35,6 +35,19 @@ describe('config', () => {
     process.env.ANTHROPIC_API_KEY = 'sk-env';
     const c = await loadConfig();
     expect(c.anthropicApiKey).toBe('sk-env');
+  });
+
+  it('round-trips openaiBaseUrl', async () => {
+    await saveConfig({ openaiBaseUrl: 'http://localhost:20128/v1' });
+    const c = await loadConfig();
+    expect(c.openaiBaseUrl).toBe('http://localhost:20128/v1');
+  });
+
+  it('lets OPENAI_BASE_URL env override the stored base url', async () => {
+    await saveConfig({ openaiBaseUrl: 'http://file/v1' });
+    process.env.OPENAI_BASE_URL = 'http://env/v1';
+    const c = await loadConfig();
+    expect(c.openaiBaseUrl).toBe('http://env/v1');
   });
 
   it('treats a malformed config file as defaults instead of throwing, and recovers on next save', async () => {
