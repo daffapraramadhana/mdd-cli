@@ -174,7 +174,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const store = new UiStore();
   store.setTheme(config.theme ?? DEFAULT_THEME);
   store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, gitBranch(cwd)));
-  const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
+  const gate = createGate({ confirm: store.requestChoice, autoApprove: opts.yes });
   const app = mountApp(store, () => {});
   store.addUser(prompt);
   store.setStatus('busy');
@@ -293,7 +293,7 @@ async function repl(opts: RunOpts): Promise<void> {
   const cwd = process.cwd();
   const branch = gitBranch(cwd);
   const store = new UiStore();
-  const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
+  const gate = createGate({ confirm: store.requestChoice, autoApprove: opts.yes });
   const registry = buildRegistry();
   const systemPrompt = buildSystemPrompt(cwd);
   const messages: Message[] = [];

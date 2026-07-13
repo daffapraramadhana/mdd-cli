@@ -51,9 +51,12 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
         continue;
       }
       const decision = await deps.gate.check(tool, use.input);
-      if (decision === 'deny') {
-        results.push({ type: 'tool_result', toolUseId: use.id, content: 'User denied this tool call.', isError: true });
-        deps.onToolEnd?.(true, 'User denied this tool call.');
+      if (!decision.allow) {
+        const msg = decision.reason
+          ? `User denied this tool call. They said: ${decision.reason}`
+          : 'User denied this tool call.';
+        results.push({ type: 'tool_result', toolUseId: use.id, content: msg, isError: true });
+        deps.onToolEnd?.(true, msg);
         continue;
       }
       try {
