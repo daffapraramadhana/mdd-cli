@@ -3,8 +3,10 @@ import type { SessionMeta } from './banner.js';
 export type TranscriptItem =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
-  | { kind: 'tool'; name: string; input: unknown }
+  | { kind: 'tool'; name: string; input: unknown; status: 'ok' | 'error' }
   | { kind: 'system'; text: string };
+
+export interface ActiveTool { name: string; input: unknown; }
 
 export interface UiState {
   transcript: TranscriptItem[];
@@ -12,10 +14,13 @@ export interface UiState {
   status: 'idle' | 'busy';
   pendingPrompt: string | null;
   meta: SessionMeta | null;
+  activeTool: ActiveTool | null;
 }
 
 export class UiStore {
-  private state: UiState = { transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null };
+  private state: UiState = {
+    transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
+  };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
 
@@ -47,9 +52,20 @@ export class UiStore {
     });
   };
 
-  addTool = (name: string, input: unknown): void => {
+  // A tool begins: commit any streamed text, then show it as the live "running" item.
+  startTool = (name: string, input: unknown): void => {
     this.commitStreaming();
-    this.set({ transcript: [...this.state.transcript, { kind: 'tool', name, input }] });
+    this.set({ activeTool: { name, input } });
+  };
+
+  // A tool finishes: move the active tool into the transcript with its outcome.
+  endTool = (status: 'ok' | 'error'): void => {
+    const active = this.state.activeTool;
+    if (!active) return;
+    this.set({
+      transcript: [...this.state.transcript, { kind: 'tool', name: active.name, input: active.input, status }],
+      activeTool: null,
+    });
   };
 
   addSystem = (text: string): void => {

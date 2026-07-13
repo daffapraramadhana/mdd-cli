@@ -35,6 +35,37 @@ describe('runTurn', () => {
     expect(last.content.some((b) => b.type === 'text' && b.text.includes('FILEBODY'))).toBe(true);
   });
 
+  it('fires onToolStart then onToolEnd (isError=false on success, true on denial)', async () => {
+    await writeFile(join(dir, 'a.txt'), 'X');
+    const events: string[] = [];
+    // success: read_file allowed
+    const okProvider = new FakeProvider([
+      [{ type: 'tool_use', id: 't1', name: 'read_file', input: { path: 'a.txt' } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'done' }, { type: 'done', stopReason: 'end' }],
+    ]);
+    await runTurn([{ role: 'user', content: [{ type: 'text', text: 'read' }] }], {
+      provider: okProvider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+      onToolStart: (name) => events.push(`start:${name}`),
+      onToolEnd: (isError) => events.push(`end:${isError}`),
+    });
+    expect(events).toEqual(['start:read_file', 'end:false']);
+
+    // denial: write_file denied → onToolEnd(true)
+    const denyEvents: string[] = [];
+    const denyProvider = new FakeProvider([
+      [{ type: 'tool_use', id: 't2', name: 'write_file', input: { path: 'x.txt', content: 'no' } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'skipped' }, { type: 'done', stopReason: 'end' }],
+    ]);
+    await runTurn([{ role: 'user', content: [{ type: 'text', text: 'write' }] }], {
+      provider: denyProvider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'n' }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+      onToolStart: (name) => denyEvents.push(`start:${name}`),
+      onToolEnd: (isError) => denyEvents.push(`end:${isError}`),
+    });
+    expect(denyEvents).toEqual(['start:write_file', 'end:true']);
+  });
+
   it('returns a denial tool_result when the gate denies a mutating tool', async () => {
     const provider = new FakeProvider([
       [{ type: 'tool_use', id: 'tu1', name: 'write_file', input: { path: 'x.txt', content: 'no' } }, { type: 'done', stopReason: 'tool_use' }],

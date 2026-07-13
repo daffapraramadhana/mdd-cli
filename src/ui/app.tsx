@@ -4,6 +4,8 @@ import { Box, Text, Static } from 'ink';
 import TextInput from 'ink-text-input';
 import type { UiStore, TranscriptItem } from './store.js';
 import { formatStatus, formatPath } from './banner.js';
+import { formatToolCall } from './format.js';
+import { Markdown } from './markdown.js';
 
 const GUTTER = 5;
 const HINTS = '/model  /models  /provider  /help';
@@ -19,12 +21,21 @@ function Row({ label, color, children }: { label: string; color?: string; childr
   );
 }
 
+function ToolLine({ marker, color, text }: { marker: string; color?: string; text: string }) {
+  return (
+    <Box>
+      <Box width={GUTTER} flexShrink={0}><Text> </Text></Box>
+      <Text color={color}>{`${marker} ${text}`}</Text>
+    </Box>
+  );
+}
+
 function renderItem(item: TranscriptItem, key: number) {
   if (item.kind === 'user') {
     return <Row key={key} label="You" color="cyan"><Text>{item.text}</Text></Row>;
   }
   if (item.kind === 'assistant') {
-    return <Row key={key} label="MDD" color="magenta"><Text>{item.text}</Text></Row>;
+    return <Row key={key} label="MDD" color="magenta"><Markdown text={item.text} /></Row>;
   }
   if (item.kind === 'system') {
     return (
@@ -34,11 +45,14 @@ function renderItem(item: TranscriptItem, key: number) {
       </Box>
     );
   }
+  const ok = item.status === 'ok';
   return (
-    <Box key={key}>
-      <Box width={GUTTER} flexShrink={0}><Text> </Text></Box>
-      <Text color="yellow">{`↳ ${item.name} ${JSON.stringify(item.input)}`}</Text>
-    </Box>
+    <ToolLine
+      key={key}
+      marker={ok ? '✓' : '✗'}
+      color={ok ? 'green' : 'red'}
+      text={formatToolCall(item.name, item.input)}
+    />
   );
 }
 
@@ -63,7 +77,10 @@ export function App({ store, onSubmit }: { store: UiStore; onSubmit: (line: stri
       {state.streaming ? (
         <Row label="MDD" color="magenta"><Text>{state.streaming}</Text></Row>
       ) : null}
-      {thinking ? (
+      {state.activeTool ? (
+        <ToolLine marker="⋯" color="gray" text={formatToolCall(state.activeTool.name, state.activeTool.input)} />
+      ) : null}
+      {thinking && !state.activeTool ? (
         <Row label="MDD" color="magenta"><Text dimColor>…thinking</Text></Row>
       ) : null}
 
