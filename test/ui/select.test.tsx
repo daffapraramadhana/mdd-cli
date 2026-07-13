@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from 'ink-testing-library';
-import { clampIndex, SelectList } from '../../src/ui/select.js';
+import { clampIndex, SelectList, type PromptSpec } from '../../src/ui/select.js';
 
 describe('clampIndex', () => {
   it('wraps around both ends', () => {
@@ -13,16 +13,59 @@ describe('clampIndex', () => {
   });
 });
 
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+// ink-testing-library's stdin.write() dispatches through Ink/React's async scheduler: the
+// re-render from a state update lands within a tick, but ink's useInput re-subscribes its
+// internal listener (with the fresh closure) via a passive effect that settles a couple of
+// ticks later. A single tick() can leave the OLD closure (stale `idx`) handling the very next
+// write. Settling on a few ticks after each write avoids that race without weakening assertions.
+const settle = async (n = 3) => { for (let i = 0; i < n; i++) await tick(); };
+
 describe('SelectList', () => {
-  it('renders the title, options with a highlighted cursor, and hints', () => {
-    const { lastFrame } = render(
-      <SelectList title="Select a model" options={['gpt-5', 'cc/claude-opus-4-8']} onSelect={() => {}} onCancel={() => {}} accent="#a855f7" />,
-    );
+  const spec: PromptSpec = {
+    title: 'Pick one',
+    body: ['some context line'],
+    options: [
+      { label: 'first', value: 'a' },
+      { label: 'type your own', value: 'free', opensInput: true, inputPlaceholder: 'your answer' },
+    ],
+  };
+
+  it('renders the title, body, options, and a highlighted cursor', () => {
+    const { lastFrame } = render(<SelectList spec={spec} onResolve={() => {}} accent="#a855f7" />);
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('Select a model');
-    expect(frame).toContain('gpt-5');
-    expect(frame).toContain('cc/claude-opus-4-8');
-    expect(frame).toContain('❯ gpt-5'); // first option highlighted by default
-    expect(frame).toContain('enter select');
+    expect(frame).toContain('Pick one');
+    expect(frame).toContain('some context line');
+    expect(frame).toContain('❯ first'); // first option highlighted by default
+    expect(frame).toContain('type your own');
+  });
+
+  it('resolves the value of a plain option on Enter', () => {
+    const onResolve = vi.fn();
+    const { stdin } = render(<SelectList spec={spec} onResolve={onResolve} accent="#a855f7" />);
+    stdin.write('\r'); // Enter on the first option
+    expect(onResolve).toHaveBeenCalledWith({ value: 'a' });
+  });
+
+  it('resolves null on Esc at the option list', async () => {
+    const onResolve = vi.fn();
+    const { stdin } = render(<SelectList spec={spec} onResolve={onResolve} accent="#a855f7" />);
+    stdin.write('\x1B'); // Esc
+    await settle();
+    expect(onResolve).toHaveBeenCalledWith(null);
+  });
+
+  it('enters text mode for an opensInput option and resolves { value, text } on Enter', async () => {
+    const onResolve = vi.fn();
+    const { stdin } = render(<SelectList spec={spec} onResolve={onResolve} accent="#a855f7" />);
+    stdin.write('\x1B[B'); // Down to the "type your own" option
+    await settle();
+    stdin.write('\r');     // select it -> enters text mode
+    await settle();
+    stdin.write('hi');     // type
+    await settle();
+    stdin.write('\r');     // submit
+    await settle();
+    expect(onResolve).toHaveBeenCalledWith({ value: 'free', text: 'hi' });
   });
 });
