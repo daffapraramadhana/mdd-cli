@@ -44,4 +44,20 @@ describe('createGate', () => {
     const gate = createGate({ confirm: async () => null });
     expect(await gate.check(tool(), {})).toEqual({ allow: false });
   });
+
+  it('auto-approves a mutating tool without confirming when autoApprove is set', async () => {
+    let asked = 0;
+    const gate = createGate({ confirm: async () => { asked++; return { value: 'yes' }; }, autoApprove: true });
+    const d = await gate.check(tool(), {}); // tool() is mutating by default in this file
+    expect(d).toEqual({ allow: true });
+    expect(asked).toBe(0); // confirm never called
+  });
+
+  it('does not remember a plain "yes" — re-confirms on the next call', async () => {
+    let asked = 0;
+    const gate = createGate({ confirm: async () => { asked++; return { value: 'yes' }; } });
+    expect(await gate.check(tool(), {})).toEqual({ allow: true });
+    expect(await gate.check(tool(), {})).toEqual({ allow: true });
+    expect(asked).toBe(2); // asked both times — not cached like 'always'
+  });
 });
