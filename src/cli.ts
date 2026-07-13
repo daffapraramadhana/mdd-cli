@@ -4,8 +4,10 @@ import { realpathSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { Command } from 'commander';
-import { loadConfig, saveConfig, type Config } from './config/index.js';
+import { loadConfig, saveConfig, configDir, type Config } from './config/index.js';
+import { SessionStore, makeSessionId, truncateTitle, type SessionRecord, type SessionSummary } from './session.js';
 import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
@@ -25,7 +27,32 @@ const A = (s: string): string => `\x1b[1m\x1b[35m${s}\x1b[0m`; // bold magenta a
 const D = (s: string): string => `\x1b[2m${s}\x1b[0m`;         // dim
 const G = (s: string): string => `\x1b[32m${s}\x1b[0m`;        // green
 
-interface RunOpts { provider?: 'anthropic' | 'openai'; model?: string; yes?: boolean; baseUrl?: string; }
+interface RunOpts {
+  provider?: 'anthropic' | 'openai';
+  model?: string;
+  yes?: boolean;
+  baseUrl?: string;
+  continue?: boolean;
+  resume?: boolean;
+}
+
+/** Compact "3m ago" / "2h ago" / "just now" relative time for session pickers. */
+export function relativeTime(then: number, now: number): string {
+  const s = Math.max(0, Math.floor((now - then) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/** A one-line label for a session in the resume picker. */
+export function sessionOptionLabel(s: SessionSummary, now: number): string {
+  const title = s.title || '(untitled)';
+  const count = `${s.messageCount} msg${s.messageCount === 1 ? '' : 's'}`;
+  return `${title}  ·  ${relativeTime(s.updatedAt, now)}  ·  ${count}`;
+}
 
 export const PROVIDER_DEFAULT_MODEL: Record<'anthropic' | 'openai', string> = {
   anthropic: 'claude-opus-4-8',
@@ -272,6 +299,23 @@ async function repl(opts: RunOpts): Promise<void> {
   };
   refreshMeta();
 
+  // Session persistence: one record per REPL conversation, saved after each completed turn.
+  const sessions = new SessionStore(join(configDir(), 'sessions'));
+  let currentId = makeSessionId(Date.now(), Math.random().toString(36).slice(2, 8));
+  let createdAt = Date.now();
+  let title = '';
+
+  // Replace the live conversation with a saved record (memory, transcript, model, lifecycle ids).
+  const seed = (record: SessionRecord): void => {
+    messages.splice(0, messages.length, ...record.messages);
+    store.loadTranscript(record.transcript);
+    currentId = record.id;
+    createdAt = record.createdAt;
+    title = record.title;
+    session.model = record.model;
+    refreshMeta();
+  };
+
   const applyTheme = (name: string): void => { store.setTheme(name); void saveConfig({ theme: name }); };
 
   const pickModel = (): void => {
@@ -293,6 +337,7 @@ async function repl(opts: RunOpts): Promise<void> {
     }
     running = true;
     store.addUser(line);
+    if (!title) title = truncateTitle(line);
     store.setStatus('busy');
     messages.push({ role: 'user', content: [{ type: 'text', text: line }] });
     const h = streamHandlers(store);
@@ -308,8 +353,43 @@ async function repl(opts: RunOpts): Promise<void> {
       store.commitStreaming();
       store.setStatus('idle');
       running = false;
+      // Fire-and-forget atomic save of the completed turn.
+      void sessions.save({
+        id: currentId, cwd, createdAt, updatedAt: Date.now(),
+        provider: session.providerName, model: session.model, title,
+        messages, transcript: store.getState().transcript,
+      }).catch(() => store.addSystem('⚠ could not save session history'));
     }
   };
+
+  // Resume a prior conversation before the TUI mounts (readline pickers need the plain terminal).
+  if (opts.continue) {
+    const r = await sessions.mostRecent(cwd);
+    if (r) seed(r);
+    else store.addSystem('No previous session in this project — starting fresh.');
+  } else if (opts.resume) {
+    const summaries = await sessions.list(cwd);
+    if (!summaries.length) {
+      store.addSystem('No sessions to resume — starting fresh.');
+    } else {
+      const now = Date.now();
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      try {
+        process.stdout.write('\n' + A('Resume a session') + '\n');
+        summaries.forEach((s, i) => {
+          process.stdout.write(`  ${A(String(i + 1))}) ${sessionOptionLabel(s, now)}\n`);
+        });
+        process.stdout.write(D('  (enter a number, or blank to start fresh)') + '\n');
+        const ans = (await rl.question('  › ')).trim();
+        const idx = Number(ans) - 1;
+        if (Number.isInteger(idx) && idx >= 0 && idx < summaries.length) {
+          const r = await sessions.load(cwd, summaries[idx].id);
+          if (r) seed(r);
+          else store.addSystem('Could not load that session — starting fresh.');
+        }
+      } finally { rl.close(); }
+    }
+  }
 
   // Interactive REPL in the normal terminal buffer: native smooth scroll, banner at the top
   // of scrollback, status pinned at the bottom. History persists in scrollback after exit.
@@ -325,6 +405,8 @@ async function main(): Promise<void> {
   program.option('--model <name>', 'model id');
   program.option('--base-url <url>', 'OpenAI-compatible base URL (e.g. 9router at http://localhost:20128/v1)');
   program.option('-y, --yes', 'auto-approve mutating tools');
+  program.option('-c, --continue', 'resume the most recent session in this project');
+  program.option('-r, --resume', 'pick a past session in this project to resume');
 
   program.command('auth').command('login').description('Store your API keys').action(authLogin);
 
