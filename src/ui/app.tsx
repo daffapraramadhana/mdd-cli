@@ -15,7 +15,7 @@ import { VERSION } from '../version.js';
 import { formatUsage } from '../usage.js';
 
 const GUTTER = 5;
-const HINTS = '/model  /theme  /help  /exit';
+const HINTS = '/model  /resume  /theme  /help  /exit';
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {
   return (

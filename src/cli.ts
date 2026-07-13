@@ -190,6 +190,7 @@ export const HELP = [
   'commands:',
   '  /model [id]        show or switch the model (takes effect next turn)',
   '  /models            pick a model (↑/↓, enter)',
+  '  /resume            resume a past session in this project (↑/↓, enter)',
   '  /provider <name>   switch provider: anthropic | openai',
   `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
@@ -211,6 +212,7 @@ export interface CommandDeps {
   refreshMeta: () => void;
   applyTheme: (name: string) => void;
   pickModel: () => void;
+  resumeSession: () => void;
   exit: () => void;
 }
 
@@ -224,6 +226,9 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
       break;
     case 'models':
       deps.pickModel();
+      break;
+    case 'resume':
+      deps.resumeSession();
       break;
     case 'model':
       if (!arg) { deps.store.addSystem(`current model: ${session.model}`); break; }
@@ -325,6 +330,23 @@ async function repl(opts: RunOpts): Promise<void> {
     })();
   };
 
+  const resumeSession = (): void => {
+    void (async () => {
+      const summaries = await sessions.list(cwd);
+      if (!summaries.length) { store.addSystem('No sessions to resume.'); return; }
+      const now = Date.now();
+      const labels = summaries.map((s) => sessionOptionLabel(s, now));
+      const chosen = await store.requestSelect('Resume a session  (↑/↓ · enter · esc)', labels);
+      if (!chosen) return;
+      const idx = labels.indexOf(chosen);
+      if (idx < 0) return;
+      const record = await sessions.load(cwd, summaries[idx].id);
+      if (!record) { store.addSystem('Could not load that session.'); return; }
+      seed(record);
+      store.addSystem(`→ resumed: ${record.title || '(untitled)'}`);
+    })();
+  };
+
   // Assigned just below; /exit unmounts the app so ink restores the terminal cleanly.
   let app: { unmount(): void; waitUntilExit(): Promise<void> } | undefined;
   const exit = (): void => { if (app) app.unmount(); else process.exit(0); };
@@ -332,7 +354,7 @@ async function repl(opts: RunOpts): Promise<void> {
   const onSubmit = async (line: string): Promise<void> => {
     if (running) return;
     if (line.startsWith('/')) {
-      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, exit });
+      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit });
       return;
     }
     running = true;
