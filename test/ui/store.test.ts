@@ -74,20 +74,34 @@ describe('UiStore', () => {
     expect(s.getState().transcript).toEqual([{ kind: 'system', text: '→ model set to gpt-5' }]);
   });
 
-  it('resolves the requestSelect promise with the chosen option', async () => {
+  it('requestChoice sets pendingChoice and resolveChoice resolves + clears it', async () => {
     const s = new UiStore();
-    const p = s.requestSelect('Select a model', ['gpt-5', 'cc/claude-opus-4-8']);
-    expect(s.getState().pendingSelect).toEqual({ title: 'Select a model', options: ['gpt-5', 'cc/claude-opus-4-8'] });
-    s.resolveSelect('cc/claude-opus-4-8');
-    expect(await p).toBe('cc/claude-opus-4-8');
-    expect(s.getState().pendingSelect).toBeNull();
+    const p = s.requestChoice({ title: 'ok?', options: [{ label: 'yes', value: 'y' }] });
+    expect(s.getState().pendingChoice).toEqual({ title: 'ok?', options: [{ label: 'yes', value: 'y' }] });
+    s.resolveChoice({ value: 'y' });
+    expect(s.getState().pendingChoice).toBeNull();
+    await expect(p).resolves.toEqual({ value: 'y' });
   });
 
-  it('resolves requestSelect with null when cancelled', async () => {
+  it('requestAsk returns the picked option value', async () => {
     const s = new UiStore();
-    const p = s.requestSelect('pick', ['a']);
-    s.resolveSelect(null);
-    expect(await p).toBeNull();
+    const p = s.requestAsk('which pm?', ['pnpm', 'npm']);
+    const spec = s.getState().pendingChoice!;
+    expect(spec.title).toBe('which pm?');
+    expect(spec.options.map((o) => o.value)).toEqual(['pnpm', 'npm', '__free__']);
+    s.resolveChoice({ value: 'pnpm' });
+    await expect(p).resolves.toBe('pnpm');
+  });
+
+  it('requestAsk returns typed text when the free option is used, and empty string on cancel', async () => {
+    const s = new UiStore();
+    const p1 = s.requestAsk('q', ['a']);
+    s.resolveChoice({ value: '__free__', text: 'my own answer' });
+    await expect(p1).resolves.toBe('my own answer');
+
+    const p2 = s.requestAsk('q');
+    s.resolveChoice(null);
+    await expect(p2).resolves.toBe('');
   });
 
   it('holds reactive session meta (starts null, updates on setMeta)', () => {

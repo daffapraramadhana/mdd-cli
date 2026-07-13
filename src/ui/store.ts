@@ -1,5 +1,6 @@
 import { summarizePreview } from './format.js';
 import type { SessionMeta } from './banner.js';
+import type { PromptSpec, ChoiceOption, ChoiceResult } from './select.js';
 
 export type TranscriptItem =
   | { kind: 'user'; text: string }
@@ -9,8 +10,6 @@ export type TranscriptItem =
   | { kind: 'system'; text: string };
 
 export interface ActiveTool { name: string; input: unknown; startedAt: number; }
-
-export interface PendingSelect { title: string; options: string[]; }
 
 export interface UiState {
   transcript: TranscriptItem[];
@@ -22,7 +21,7 @@ export interface UiState {
   meta: SessionMeta | null;
   activeTool: ActiveTool | null;
   themeName: string;
-  pendingSelect: PendingSelect | null;
+  pendingChoice: PromptSpec | null;
   usage: { inputTokens: number; outputTokens: number };
   turnStartedAt: number | null;
 }
@@ -30,11 +29,11 @@ export interface UiState {
 export class UiStore {
   private state: UiState = {
     transcript: [], streaming: '', reasoning: '', reasoningStartedAt: null, status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
-    themeName: 'neon', pendingSelect: null, usage: { inputTokens: 0, outputTokens: 0 }, turnStartedAt: null,
+    themeName: 'neon', pendingChoice: null, usage: { inputTokens: 0, outputTokens: 0 }, turnStartedAt: null,
   };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
-  private selectResolver: ((value: string | null) => void) | null = null;
+  private choiceResolver: ((result: ChoiceResult) => void) | null = null;
   private abortHook: (() => void) | null = null;
 
   constructor(private now: () => number = Date.now) {}
@@ -118,14 +117,26 @@ export class UiStore {
   };
 
   // Interactive picker: returns the chosen option, or null if cancelled (Esc).
-  requestSelect = (title: string, options: string[]): Promise<string | null> =>
-    new Promise((resolve) => { this.selectResolver = resolve; this.set({ pendingSelect: { title, options } }); });
+  requestChoice = (spec: PromptSpec): Promise<ChoiceResult> =>
+    new Promise((resolve) => { this.choiceResolver = resolve; this.set({ pendingChoice: spec }); });
 
-  resolveSelect = (value: string | null): void => {
-    const r = this.selectResolver;
-    this.selectResolver = null;
-    this.set({ pendingSelect: null });
-    r?.(value);
+  resolveChoice = (result: ChoiceResult): void => {
+    const r = this.choiceResolver;
+    this.choiceResolver = null;
+    this.set({ pendingChoice: null });
+    r?.(result);
+  };
+
+  // Ask a free-form question with optional quick-pick suggestions; always resolves to a string
+  // (typed text, the picked suggestion, or '' if cancelled).
+  requestAsk = async (question: string, options: string[] = []): Promise<string> => {
+    const opts: ChoiceOption[] = [
+      ...options.map((o) => ({ label: o, value: o })),
+      { label: '✎ type my own answer…', value: '__free__', opensInput: true, inputPlaceholder: 'your answer' },
+    ];
+    const result = await this.requestChoice({ title: question, options: opts });
+    if (result === null) return '';
+    return result.value === '__free__' ? (result.text ?? '') : result.value;
   };
 
   addSystem = (text: string): void => {
