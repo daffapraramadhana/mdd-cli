@@ -125,7 +125,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
 
   // Esc interrupts an in-flight turn — but only when nothing else owns Esc (no select/prompt open).
   useInput((_input, key) => {
-    if (key.escape && state.status === 'busy' && state.pendingSelect === null && state.pendingPrompt === null) {
+    if (key.escape && state.status === 'busy' && state.pendingChoice === null && state.pendingPrompt === null) {
       store.requestAbort();
     }
   });
@@ -198,12 +198,10 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
   // Claude-style input chrome: a full-width horizontal rule, then a `>` prompt that stays pinned
   // at the bottom at all times — even mid-turn (busy). While a turn runs, keystrokes still edit
   // the draft, but Enter is held (see handleSubmit) so nothing is sent until the turn finishes.
-  const bottom = state.pendingSelect ? (
+  const bottom = state.pendingChoice ? (
     <SelectList
-      title={state.pendingSelect.title}
-      options={state.pendingSelect.options}
-      onSelect={(v) => store.resolveSelect(v)}
-      onCancel={() => store.resolveSelect(null)}
+      spec={state.pendingChoice}
+      onResolve={(r) => store.resolveChoice(r)}
       accent={theme.accent}
     />
   ) : (
@@ -267,7 +265,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
       <Static items={staticItems}>{(el) => el}</Static>
       {liveRows}
       {bottom ? <Box marginTop={1}>{bottom}</Box> : null}
-      {statusBar ? <Box marginTop={state.pendingSelect ? 1 : 0}>{statusBar}</Box> : null}
+      {statusBar ? <Box marginTop={state.pendingChoice ? 1 : 0}>{statusBar}</Box> : null}
     </Box>
   );
 }

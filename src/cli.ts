@@ -336,7 +336,11 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const pickModel = (): void => {
     void (async () => {
-      const chosen = await store.requestSelect('Select a model  (↑/↓ · enter · esc)', KNOWN_MODELS.map((m) => m.id));
+      const result = await store.requestChoice({
+        title: 'Select a model  (↑/↓ · enter · esc)',
+        options: KNOWN_MODELS.map((m) => ({ label: m.id, value: m.id })),
+      });
+      const chosen = result?.value;
       if (chosen) { session.model = chosen; refreshMeta(); store.addSystem(`→ model set to ${chosen}`); }
     })();
   };
@@ -347,7 +351,11 @@ async function repl(opts: RunOpts): Promise<void> {
       if (!summaries.length) { store.addSystem('No sessions to resume.'); return; }
       const now = Date.now();
       const labels = summaries.map((s) => sessionOptionLabel(s, now));
-      const chosen = await store.requestSelect('Resume a session  (↑/↓ · enter · esc)', labels);
+      const result = await store.requestChoice({
+        title: 'Resume a session  (↑/↓ · enter · esc)',
+        options: labels.map((l) => ({ label: l, value: l })),
+      });
+      const chosen = result?.value;
       if (!chosen) return;
       const idx = labels.indexOf(chosen);
       if (idx < 0) return;
