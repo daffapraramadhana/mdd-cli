@@ -130,7 +130,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
     return renderItem(item, i, userNum, theme);
   });
   const staticItems = showHeader
-    ? [<Header key="hdr" theme={theme} version={VERSION} />, ...allEls]
+    ? [<Header key="hdr" theme={theme} version={VERSION} width={width} />, ...allEls]
     : allEls;
 
   const liveRows = (
