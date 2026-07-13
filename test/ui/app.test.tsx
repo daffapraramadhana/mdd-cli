@@ -235,4 +235,32 @@ describe('App', () => {
       rmSync(imgPath, { force: true });
     }
   });
+
+  it('renders the live reasoning block dimmed while thinking', () => {
+    const store = new UiStore();
+    store.setStatus('busy');
+    store.appendReasoning('weighing the options');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('Thinking');
+    expect(frame).toContain('weighing the options');
+  });
+
+  it('caps the live reasoning block to the last 8 lines', () => {
+    const store = new UiStore();
+    store.setStatus('busy');
+    store.appendReasoning(Array.from({ length: 12 }, (_, i) => `line${i}`).join('\n'));
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).not.toContain('line0'); // trimmed from the top
+    expect(frame).toContain('line11'); // newest kept
+  });
+
+  it('renders a collapsed reasoning summary in scrollback', () => {
+    const store = new UiStore();
+    store.loadTranscript([{ kind: 'reasoning', durationMs: 2300 }]);
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('Thought for 2.3s');
+  });
 });
