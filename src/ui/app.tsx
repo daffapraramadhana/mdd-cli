@@ -147,7 +147,10 @@ export function App({ store, onSubmit, fullscreen = false }: { store: UiStore; o
   ) : inputActive ? (
     <Box borderStyle="round" borderColor={theme.accent} borderTop={false} borderRight={false} borderBottom={false} paddingLeft={1}>
       {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
-      <TextInput value={value} onChange={setValue} onSubmit={handleSubmit} placeholder={state.pendingPrompt !== null ? undefined : 'Ask anything…'} />
+      <TextInput value={value} onChange={setValue} onSubmit={handleSubmit} />
+      {/* Own dim hint instead of ink-text-input's placeholder, so the cursor is a clean
+          block and not an inverted first letter ("A"). Disappears once you type. */}
+      {state.pendingPrompt === null && value === '' ? <Text dimColor> Ask anything…</Text> : null}
     </Box>
   ) : null;
 
