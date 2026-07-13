@@ -11,10 +11,10 @@ import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { UiStore, mountApp, formatBanner, shortenCwd, type SessionMeta } from './ui/index.js';
+import { UiStore, mountApp, mountFullscreen, shortenCwd, type SessionMeta } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
-import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
-import { formatModels } from './models.js';
+import { THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
+import { formatModels, KNOWN_MODELS } from './models.js';
 import type { Message } from './types.js';
 
 const VERSION = '0.1.0';
@@ -118,7 +118,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
 export const HELP = [
   'commands:',
   '  /model [id]        show or switch the model (takes effect next turn)',
-  '  /models            list common model ids',
+  '  /models            pick a model (↑/↓, enter)',
   '  /provider <name>   switch provider: anthropic | openai',
   `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
@@ -139,6 +139,7 @@ export interface CommandDeps {
   store: Pick<UiStore, 'addSystem' | 'setMeta'>;
   refreshMeta: () => void;
   applyTheme: (name: string) => void;
+  pickModel: () => void;
   exit: () => void;
 }
 
@@ -151,7 +152,7 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
       deps.store.addSystem(HELP);
       break;
     case 'models':
-      deps.store.addSystem(formatModels());
+      deps.pickModel();
       break;
     case 'model':
       if (!arg) { deps.store.addSystem(`current model: ${session.model}`); break; }
@@ -220,10 +221,17 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const applyTheme = (name: string): void => { store.setTheme(name); void saveConfig({ theme: name }); };
 
+  const pickModel = (): void => {
+    void (async () => {
+      const chosen = await store.requestSelect('Select a model  (↑/↓ · enter · esc)', KNOWN_MODELS.map((m) => m.id));
+      if (chosen) { session.model = chosen; refreshMeta(); store.addSystem(`→ model set to ${chosen}`); }
+    })();
+  };
+
   const onSubmit = async (line: string): Promise<void> => {
     if (running) return;
     if (line.startsWith('/')) {
-      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, exit: () => process.exit(0) });
+      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, exit: () => process.exit(0) });
       return;
     }
     running = true;
@@ -246,12 +254,8 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  const bannerLines = formatBanner({ version: VERSION }).split('\n');
-  const subtitle = bannerLines.pop() ?? '';
-  // Logo in a vertical theme gradient, subtitle dim, then a blank line.
-  const logo = gradientText(bannerLines.join('\n'), getTheme(themeName).gradient);
-  process.stdout.write(`${logo}\n\x1b[2m${subtitle}\x1b[0m\n\n`);
-  const app = mountApp(store, (line) => { void onSubmit(line); });
+  // Fullscreen alternate-screen TUI (Header box at top, transcript viewport, input pinned).
+  const app = mountFullscreen(store, (line) => { void onSubmit(line); });
   await app.waitUntilExit();
 }
 
