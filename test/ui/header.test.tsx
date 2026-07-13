@@ -14,6 +14,25 @@ describe('Header', () => {
     expect(frame).toContain('/models');
   });
 
+  it('stacks the command hints below the logo at narrow widths (still shows everything)', () => {
+    const { lastFrame } = render(<Header theme={getTheme('neon')} version="0.1.0" width={44} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('█'); // full block-art logo still fits
+    expect(frame).toContain('Commands');
+    expect(frame).toContain('/models');
+    // Logo lines must render intact — no block char should have wrapped onto its own short line.
+    const logoLines = frame.split('\n').filter((l) => l.includes('█'));
+    for (const l of logoLines) expect(l.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').trim().length).toBeGreaterThan(20);
+  });
+
+  it('falls back to a compact MDD wordmark when the terminal is too narrow for block art', () => {
+    const { lastFrame } = render(<Header theme={getTheme('neon')} version="0.1.0" width={20} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).not.toContain('█'); // block art dropped so it cannot shred
+    expect(frame).toContain('MDD');
+    expect(frame).toContain('/models');
+  });
+
   // Regression: the banner must span the FULL terminal width. It lives inside <Static>, where
   // `width="100%"` collapses to content width — only an explicit numeric width stretches. This
   // renders through REAL Ink (ink-testing-library masks the Static width behavior).
