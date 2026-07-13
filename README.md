@@ -37,14 +37,18 @@ Inside the REPL, lines starting with `/` are commands (not sent to the model):
 
 ```
 /model [id]        show or switch the model (takes effect next turn)
-/models            list common model ids
+/models            pick a model with ↑/↓ and enter
 /provider <name>   switch provider: anthropic | openai
+/theme [name]      switch theme: neon | ocean | mono
 /help              show this help
 /exit              quit (or press Ctrl-C)
 ```
 
-The status bar at the bottom shows the active provider · model, working
-directory, and git branch, and updates live when you switch.
+The REPL runs as a fullscreen TUI (header box on top, input pinned at the
+bottom). Scroll earlier messages with PageUp / PageDown. The status bar shows
+the active provider · model, working directory, and git branch, and updates
+live when you switch. One-shot (`mdd "…"`) stays inline so its output pipes
+cleanly.
 
 ## Using 9router (or any OpenAI-compatible endpoint)
 

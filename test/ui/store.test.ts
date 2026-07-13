@@ -66,6 +66,22 @@ describe('UiStore', () => {
     expect(s.getState().transcript).toEqual([{ kind: 'system', text: '→ model set to gpt-5' }]);
   });
 
+  it('resolves the requestSelect promise with the chosen option', async () => {
+    const s = new UiStore();
+    const p = s.requestSelect('Select a model', ['gpt-5', 'cc/claude-opus-4-8']);
+    expect(s.getState().pendingSelect).toEqual({ title: 'Select a model', options: ['gpt-5', 'cc/claude-opus-4-8'] });
+    s.resolveSelect('cc/claude-opus-4-8');
+    expect(await p).toBe('cc/claude-opus-4-8');
+    expect(s.getState().pendingSelect).toBeNull();
+  });
+
+  it('resolves requestSelect with null when cancelled', async () => {
+    const s = new UiStore();
+    const p = s.requestSelect('pick', ['a']);
+    s.resolveSelect(null);
+    expect(await p).toBeNull();
+  });
+
   it('holds reactive session meta (starts null, updates on setMeta)', () => {
     const s = new UiStore();
     expect(s.getState().meta).toBeNull();

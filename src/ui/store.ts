@@ -8,6 +8,8 @@ export type TranscriptItem =
 
 export interface ActiveTool { name: string; input: unknown; startedAt: number; }
 
+export interface PendingSelect { title: string; options: string[]; }
+
 export interface UiState {
   transcript: TranscriptItem[];
   streaming: string;
@@ -16,15 +18,17 @@ export interface UiState {
   meta: SessionMeta | null;
   activeTool: ActiveTool | null;
   themeName: string;
+  pendingSelect: PendingSelect | null;
 }
 
 export class UiStore {
   private state: UiState = {
     transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
-    themeName: 'neon',
+    themeName: 'neon', pendingSelect: null,
   };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
+  private selectResolver: ((value: string | null) => void) | null = null;
 
   constructor(private now: () => number = Date.now) {}
 
@@ -74,6 +78,17 @@ export class UiStore {
   };
 
   setTheme = (themeName: string): void => { this.set({ themeName }); };
+
+  // Interactive picker: returns the chosen option, or null if cancelled (Esc).
+  requestSelect = (title: string, options: string[]): Promise<string | null> =>
+    new Promise((resolve) => { this.selectResolver = resolve; this.set({ pendingSelect: { title, options } }); });
+
+  resolveSelect = (value: string | null): void => {
+    const r = this.selectResolver;
+    this.selectResolver = null;
+    this.set({ pendingSelect: null });
+    r?.(value);
+  };
 
   addSystem = (text: string): void => {
     this.set({ transcript: [...this.state.transcript, { kind: 'system', text }] });

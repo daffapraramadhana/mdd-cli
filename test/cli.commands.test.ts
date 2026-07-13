@@ -11,6 +11,7 @@ function setup(config: Partial<Config> = {}, initial: Partial<ReplSession> = {})
   let refreshed = 0;
   let exited = false;
   let appliedTheme: string | null = null;
+  let pickedModel = 0;
   const session: ReplSession = {
     providerName: 'anthropic',
     model: 'claude-opus-4-8',
@@ -25,13 +26,14 @@ function setup(config: Partial<Config> = {}, initial: Partial<ReplSession> = {})
     store,
     refreshMeta: () => { refreshed++; },
     applyTheme: (name) => { appliedTheme = name; },
+    pickModel: () => { pickedModel++; },
     exit: () => { exited = true; },
   };
   const lastSystem = () => {
     const items = store.getState().transcript.filter((t) => t.kind === 'system') as { text: string }[];
     return items.at(-1)?.text ?? '';
   };
-  return { store, session, deps, lastSystem, refreshedCount: () => refreshed, exited: () => exited, appliedTheme: () => appliedTheme };
+  return { store, session, deps, lastSystem, refreshedCount: () => refreshed, exited: () => exited, appliedTheme: () => appliedTheme, pickedModel: () => pickedModel };
 }
 
 describe('handleReplCommand', () => {
@@ -41,10 +43,10 @@ describe('handleReplCommand', () => {
     expect(t.lastSystem()).toContain('/model');
   });
 
-  it('/models lists known model ids', () => {
+  it('/models opens the interactive model picker', () => {
     const t = setup();
     handleReplCommand('/models', t.session, t.deps);
-    expect(t.lastSystem()).toContain('cc/claude-opus-4-8');
+    expect(t.pickedModel()).toBe(1);
   });
 
   it('/model with no arg reports the current model', () => {
