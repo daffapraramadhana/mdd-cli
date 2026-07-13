@@ -21,7 +21,7 @@
   "description": "MDD internal terminal coding assistant",
   "type": "module",
   "bin": {
-    "mdd": "./dist/cli.js"
+    "mdd": "dist/cli.js"
   },
   "engines": {
     "node": ">=20"
