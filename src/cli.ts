@@ -185,6 +185,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
       provider, registry: buildRegistry(), gate, cwd, model,
       systemPrompt: buildSystemPrompt(cwd),
       onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
+      ask: store.requestAsk,
     });
     h.flush();
   } catch (err) {
@@ -397,6 +398,7 @@ async function repl(opts: RunOpts): Promise<void> {
         provider: session.provider, registry, gate, cwd, model: session.model, systemPrompt,
         onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
         signal: controller.signal,
+        ask: store.requestAsk,
       });
       h.flush();
     } catch (err) {

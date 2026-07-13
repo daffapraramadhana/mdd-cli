@@ -151,4 +151,18 @@ describe('runTurn', () => {
     expect(last.role).toBe('assistant');
     expect(last.content.some((b) => b.type === 'text' && /stopped after 50/i.test(b.text))).toBe(true);
   });
+
+  it('routes an ask_user tool call to the ask() dep and feeds the answer back', async () => {
+    const provider = new FakeProvider([
+      [{ type: 'tool_use', id: 'q1', name: 'ask_user', input: { question: 'which pm?', options: ['pnpm', 'npm'] } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'ok, pnpm it is' }, { type: 'done', stopReason: 'end' }],
+    ]);
+    const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'set up scripts' }] }], {
+      provider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }) }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+      ask: async () => 'pnpm',
+    });
+    const tr = out.flatMap((m) => m.content).find((b) => b.type === 'tool_result') as { content: string } | undefined;
+    expect(tr?.content).toBe('pnpm');
+  });
 });
