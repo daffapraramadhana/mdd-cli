@@ -31,6 +31,21 @@ Mutating tools (write/edit files, shell, git) prompt for confirmation unless
 
 `--model` accepts any id; `mdd models` prints the common ones.
 
+### In-REPL commands
+
+Inside the REPL, lines starting with `/` are commands (not sent to the model):
+
+```
+/model [id]        show or switch the model (takes effect next turn)
+/models            list common model ids
+/provider <name>   switch provider: anthropic | openai
+/help              show this help
+/exit              quit (or press Ctrl-C)
+```
+
+The status bar at the bottom shows the active provider · model, working
+directory, and git branch, and updates live when you switch.
+
 ## Using 9router (or any OpenAI-compatible endpoint)
 
 [9router](https://github.com/decolua/9router) exposes an OpenAI-compatible API, so

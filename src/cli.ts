@@ -1,15 +1,16 @@
 // src/cli.ts
 import { createInterface } from 'node:readline/promises';
 import { realpathSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { Command } from 'commander';
 import { loadConfig, saveConfig, type Config } from './config/index.js';
-import { getProvider } from './providers/index.js';
+import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { homedir } from 'node:os';
 import { UiStore, mountApp, formatBanner, shortenCwd, type SessionMeta } from './ui/index.js';
 import { formatModels } from './models.js';
 import type { Message } from './types.js';
@@ -60,16 +61,25 @@ async function authLogin(): Promise<void> {
   } finally { rl.close(); }
 }
 
-function sessionMeta(providerName: string, model: string, cwd: string, opts: RunOpts): SessionMeta {
-  return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove: !!opts.yes };
+function gitBranch(cwd: string): string | undefined {
+  try {
+    const b = execSync('git rev-parse --abbrev-ref HEAD', { cwd, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim();
+    return b && b !== 'HEAD' ? b : undefined;
+  } catch { return undefined; }
+}
+
+function sessionMeta(providerName: string, model: string, cwd: string, autoApprove: boolean, branch?: string): SessionMeta {
+  return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove, branch };
 }
 
 async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const { provider, model } = await resolveSetup(opts);
   const cwd = process.cwd();
   const store = new UiStore();
+  store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, gitBranch(cwd)));
   const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
-  const app = mountApp(store, () => {}, sessionMeta(provider.name, model, cwd, opts));
+  const app = mountApp(store, () => {});
   store.addUser(prompt);
   store.setStatus('busy');
   const messages: Message[] = [{ role: 'user', content: [{ type: 'text', text: prompt }] }];
@@ -88,9 +98,76 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   }
 }
 
+export const HELP = [
+  'commands:',
+  '  /model [id]        show or switch the model (takes effect next turn)',
+  '  /models            list common model ids',
+  '  /provider <name>   switch provider: anthropic | openai',
+  '  /help              show this help',
+  '  /exit              quit (or press Ctrl-C)',
+].join('\n');
+
+/** Mutable per-REPL session state that slash commands read and update. */
+export interface ReplSession {
+  providerName: 'anthropic' | 'openai';
+  model: string;
+  provider: LLMProvider;
+}
+
+export interface CommandDeps {
+  config: Config;
+  effectiveConfig: Config;
+  store: Pick<UiStore, 'addSystem' | 'setMeta'>;
+  refreshMeta: () => void;
+  exit: () => void;
+}
+
+/** Execute a `/command` line, mutating `session` and reporting via the store. */
+export function handleReplCommand(input: string, session: ReplSession, deps: CommandDeps): void {
+  const [cmd, ...rest] = input.slice(1).split(/\s+/);
+  const arg = rest.join(' ').trim();
+  switch (cmd) {
+    case 'help':
+      deps.store.addSystem(HELP);
+      break;
+    case 'models':
+      deps.store.addSystem(formatModels());
+      break;
+    case 'model':
+      if (!arg) { deps.store.addSystem(`current model: ${session.model}`); break; }
+      session.model = arg;
+      deps.refreshMeta();
+      deps.store.addSystem(`→ model set to ${arg}`);
+      break;
+    case 'provider': {
+      if (arg !== 'anthropic' && arg !== 'openai') {
+        deps.store.addSystem('usage: /provider anthropic | openai');
+        break;
+      }
+      try {
+        session.provider = getProvider(arg, deps.effectiveConfig);
+        session.providerName = arg;
+        session.model = resolveModel(arg, deps.config, undefined);
+        deps.refreshMeta();
+        deps.store.addSystem(`→ provider set to ${arg} (model ${session.model})`);
+      } catch (err) {
+        deps.store.addSystem(`✗ ${err instanceof Error ? err.message : String(err)}`);
+      }
+      break;
+    }
+    case 'exit':
+    case 'quit':
+      deps.exit();
+      break;
+    default:
+      deps.store.addSystem(`unknown command: /${cmd} — try /help`);
+  }
+}
+
 async function repl(opts: RunOpts): Promise<void> {
-  const { provider, model } = await resolveSetup(opts);
+  const config = await loadConfig();
   const cwd = process.cwd();
+  const branch = gitBranch(cwd);
   const store = new UiStore();
   const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
   const registry = buildRegistry();
@@ -98,15 +175,32 @@ async function repl(opts: RunOpts): Promise<void> {
   const messages: Message[] = [];
   let running = false;
 
+  const providerName = opts.provider ?? config.defaultProvider;
+  const effectiveConfig = opts.baseUrl ? { ...config, openaiBaseUrl: opts.baseUrl } : config;
+  const session: ReplSession = {
+    providerName,
+    model: resolveModel(providerName, config, opts.model),
+    provider: getProvider(providerName, effectiveConfig),
+  };
+
+  const refreshMeta = (): void => {
+    store.setMeta(sessionMeta(session.providerName, session.model, cwd, !!opts.yes, branch));
+  };
+  refreshMeta();
+
   const onSubmit = async (line: string): Promise<void> => {
     if (running) return;
+    if (line.startsWith('/')) {
+      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, exit: () => process.exit(0) });
+      return;
+    }
     running = true;
     store.addUser(line);
     store.setStatus('busy');
     messages.push({ role: 'user', content: [{ type: 'text', text: line }] });
     try {
       await runTurn(messages, {
-        provider, registry, gate, cwd, model, systemPrompt,
+        provider: session.provider, registry, gate, cwd, model: session.model, systemPrompt,
         onText: store.appendStreaming, onToolStart: store.addTool,
       });
     } catch (err) {
@@ -119,7 +213,7 @@ async function repl(opts: RunOpts): Promise<void> {
   };
 
   process.stdout.write(formatBanner({ version: VERSION }) + '\n');
-  const app = mountApp(store, (line) => { void onSubmit(line); }, sessionMeta(provider.name, model, cwd, opts));
+  const app = mountApp(store, (line) => { void onSubmit(line); });
   await app.waitUntilExit();
 }
 

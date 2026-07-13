@@ -41,4 +41,17 @@ describe('UiStore', () => {
     s.setStatus('idle');
     expect(calls).toBe(1);
   });
+
+  it('adds a system item to the transcript', () => {
+    const s = new UiStore();
+    s.addSystem('→ model set to gpt-5');
+    expect(s.getState().transcript).toEqual([{ kind: 'system', text: '→ model set to gpt-5' }]);
+  });
+
+  it('holds reactive session meta (starts null, updates on setMeta)', () => {
+    const s = new UiStore();
+    expect(s.getState().meta).toBeNull();
+    s.setMeta({ provider: 'openai', model: 'cc/claude-opus-4-8', cwd: '~/p', branch: 'main' });
+    expect(s.getState().meta).toMatchObject({ provider: 'openai', model: 'cc/claude-opus-4-8', branch: 'main' });
+  });
 });

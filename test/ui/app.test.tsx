@@ -40,15 +40,29 @@ describe('App', () => {
     expect(frame).toContain('hello back');
   });
 
-  it('renders the status footer when meta is provided', () => {
+  it('renders the status + path footer from the store meta', () => {
     const store = new UiStore();
-    const { lastFrame } = render(
-      <App store={store} onSubmit={() => {}} meta={{ provider: 'openai', model: 'cc/claude-opus-4-8', cwd: '~/proj', autoApprove: true }} />,
-    );
+    store.setMeta({ provider: 'openai', model: 'cc/claude-opus-4-8', cwd: '~/proj', branch: 'main', autoApprove: true });
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
     const frame = lastFrame() ?? '';
+    expect(frame).toContain('mdd');
     expect(frame).toContain('openai');
     expect(frame).toContain('cc/claude-opus-4-8');
-    expect(frame).toContain('~/proj');
+    expect(frame).toContain('~/proj (main)');
     expect(frame).toContain('auto-approve');
+    expect(frame).toContain('/model');
+  });
+
+  it('renders a system (command feedback) line', () => {
+    const store = new UiStore();
+    store.addSystem('→ model set to cc/claude-sonnet-5');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame()).toContain('→ model set to cc/claude-sonnet-5');
+  });
+
+  it('shows the input placeholder when idle and empty', () => {
+    const store = new UiStore();
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame()).toContain('Ask anything');
   });
 });
