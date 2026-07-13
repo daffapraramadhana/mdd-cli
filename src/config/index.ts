@@ -7,6 +7,8 @@ export interface Config {
   defaultModel: string;
   anthropicApiKey?: string;
   openaiApiKey?: string;
+  /** Custom OpenAI-compatible base URL, e.g. http://localhost:20128/v1 for 9router. */
+  openaiBaseUrl?: string;
 }
 
 const DEFAULTS: Config = { defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-8' };
@@ -36,6 +38,7 @@ export async function loadConfig(): Promise<Config> {
   const merged: Config = { ...DEFAULTS, ...file };
   if (process.env.ANTHROPIC_API_KEY) merged.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   if (process.env.OPENAI_API_KEY) merged.openaiApiKey = process.env.OPENAI_API_KEY;
+  if (process.env.OPENAI_BASE_URL) merged.openaiBaseUrl = process.env.OPENAI_BASE_URL;
   return merged;
 }
 

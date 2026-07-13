@@ -10,9 +10,10 @@ import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { UiStore, mountApp } from './ui/index.js';
+import { formatModels } from './models.js';
 import type { Message } from './types.js';
 
-interface RunOpts { provider?: 'anthropic' | 'openai'; model?: string; yes?: boolean; }
+interface RunOpts { provider?: 'anthropic' | 'openai'; model?: string; yes?: boolean; baseUrl?: string; }
 
 export const PROVIDER_DEFAULT_MODEL: Record<'anthropic' | 'openai', string> = {
   anthropic: 'claude-opus-4-8',
@@ -33,7 +34,9 @@ async function resolveSetup(opts: RunOpts) {
   const config = await loadConfig();
   const providerName = opts.provider ?? config.defaultProvider;
   const model = resolveModel(providerName, config, opts.model);
-  const provider = getProvider(providerName, config);
+  // Precedence for the OpenAI base URL: --base-url flag > config (file or OPENAI_BASE_URL env) > SDK default.
+  const effectiveConfig = opts.baseUrl ? { ...config, openaiBaseUrl: opts.baseUrl } : config;
+  const provider = getProvider(providerName, effectiveConfig);
   return { provider, model };
 }
 
@@ -43,7 +46,11 @@ async function authLogin(): Promise<void> {
     const which = (await rl.question('Configure which provider? [anthropic/openai/both]: ')).trim().toLowerCase();
     const patch: Partial<Config> = {};
     if (which === 'anthropic' || which === 'both') patch.anthropicApiKey = (await rl.question('Anthropic API key: ')).trim();
-    if (which === 'openai' || which === 'both') patch.openaiApiKey = (await rl.question('OpenAI API key: ')).trim();
+    if (which === 'openai' || which === 'both') {
+      patch.openaiApiKey = (await rl.question('OpenAI API key: ')).trim();
+      const baseUrl = (await rl.question('OpenAI base URL (blank for default; e.g. http://localhost:20128/v1 for 9router): ')).trim();
+      if (baseUrl) patch.openaiBaseUrl = baseUrl;
+    }
     if (which === 'openai') { patch.defaultProvider = 'openai'; patch.defaultModel = 'gpt-5'; }
     await saveConfig(patch);
     process.stdout.write('Saved to ~/.config/mdd/config.json\n');
@@ -114,9 +121,14 @@ async function main(): Promise<void> {
   program.version('0.1.0');
   program.option('--provider <name>', 'anthropic or openai');
   program.option('--model <name>', 'model id');
+  program.option('--base-url <url>', 'OpenAI-compatible base URL (e.g. 9router at http://localhost:20128/v1)');
   program.option('-y, --yes', 'auto-approve mutating tools');
 
   program.command('auth').command('login').description('Store your API keys').action(authLogin);
+
+  program.command('models').description('List commonly-used model ids').action(() => {
+    process.stdout.write(formatModels() + '\n');
+  });
 
   program.argument('[prompt...]', 'one-shot prompt; omit for interactive REPL').action(async (promptWords: string[]) => {
     const opts = program.opts<RunOpts>();

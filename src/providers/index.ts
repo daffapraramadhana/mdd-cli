@@ -23,5 +23,5 @@ export function getProvider(name: 'anthropic' | 'openai', config: Config): LLMPr
     return new AnthropicProvider(config.anthropicApiKey);
   }
   if (!config.openaiApiKey) throw new Error('No OpenAI API key. Run `mdd auth login`.');
-  return new OpenAIProvider(config.openaiApiKey);
+  return new OpenAIProvider(config.openaiApiKey, config.openaiBaseUrl);
 }

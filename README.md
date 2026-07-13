@@ -23,15 +23,42 @@ mdd                                     # interactive REPL (ink UI)
 mdd "add a health check and run tests"  # one-shot
 mdd --provider openai --model gpt-5 "explain this repo"
 mdd --yes "reformat src/**/*.ts"        # auto-approve mutations (use with care)
+mdd models                              # list commonly-used model ids
 ```
 
 Mutating tools (write/edit files, shell, git) prompt for confirmation unless
 `--yes` is set. Read-only tools run without prompting. Ctrl-C exits the REPL.
 
+`--model` accepts any id; `mdd models` prints the common ones.
+
+## Using 9router (or any OpenAI-compatible endpoint)
+
+[9router](https://github.com/decolua/9router) exposes an OpenAI-compatible API, so
+`mdd` talks to it through the `openai` provider — point it at 9router's base URL and
+use a 9router model id:
+
+```bash
+mdd auth login   # choose openai; paste your 9router key; enter base URL when prompted,
+                 # e.g. http://localhost:20128/v1
+
+# or per-invocation, without storing it:
+mdd --provider openai \
+    --base-url http://localhost:20128/v1 \
+    --model cc/claude-opus-4-8 \
+    "explain this repo"
+```
+
+`mdd models` lists the known 9router (`cc/*`) ids. Base-URL precedence:
+`--base-url` flag → `OPENAI_BASE_URL` env → stored config → OpenAI's default.
+
+Note: `mdd`'s tools need the routed backend to support streamed OpenAI **function
+calling**; if a model returns text but never invokes tools, that backend likely
+doesn't support tool calls in the OpenAI format.
+
 ## Config
 
 `~/.config/mdd/config.json` (mode 0600). Env overrides: `ANTHROPIC_API_KEY`,
-`OPENAI_API_KEY`.
+`OPENAI_API_KEY`, `OPENAI_BASE_URL`.
 
 ## Roadmap (v2)
 
