@@ -10,14 +10,19 @@ export interface SessionMeta {
   branch?: string;
 }
 
-/** A boxed MDD header, printed once to stdout at REPL start (above ink's output). */
+// Big "MDD" in the ANSI Shadow figlet style, printed once at REPL start.
+const LOGO = [
+  '███╗   ███╗██████╗ ██████╗ ',
+  '████╗ ████║██╔══██╗██╔══██╗',
+  '██╔████╔██║██║  ██║██║  ██║',
+  '██║╚██╔╝██║██║  ██║██║  ██║',
+  '██║ ╚═╝ ██║██████╔╝██████╔╝',
+  '╚═╝     ╚═╝╚═════╝ ╚═════╝ ',
+];
+
+/** A big ASCII "MDD" header, printed once to stdout at REPL start (above ink's output). */
 export function formatBanner(opts: { version: string }): string {
-  const inner = `  MDD · terminal coding assistant   v${opts.version}  `;
-  const width = inner.length;
-  const top = '╭' + '─'.repeat(width) + '╮';
-  const mid = '│' + inner + '│';
-  const bot = '╰' + '─'.repeat(width) + '╯';
-  return [top, mid, bot].join('\n');
+  return [...LOGO, `terminal coding assistant · v${opts.version}`].join('\n');
 }
 
 /** Replace a leading home-directory prefix with `~` for a compact cwd. */

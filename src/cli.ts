@@ -212,7 +212,10 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  process.stdout.write(formatBanner({ version: VERSION }) + '\n');
+  const bannerLines = formatBanner({ version: VERSION }).split('\n');
+  const subtitle = bannerLines.pop() ?? '';
+  // Logo in bold magenta, subtitle dim, then a blank line.
+  process.stdout.write(`\x1b[1m\x1b[35m${bannerLines.join('\n')}\x1b[0m\n\x1b[2m${subtitle}\x1b[0m\n\n`);
   const app = mountApp(store, (line) => { void onSubmit(line); });
   await app.waitUntilExit();
 }
