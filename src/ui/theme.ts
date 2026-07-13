@@ -82,6 +82,16 @@ export function gradientColors(count: number, stops: string[]): RGB[] {
   return out;
 }
 
+export function rgbToHex([r, g, b]: RGB): string {
+  const h = (n: number): string => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${h(r)}${h(g)}${h(b)}`;
+}
+
+/** `count` gradient colors across the stops, as hex strings (for ink's `color` prop). */
+export function gradientHexes(count: number, stops: string[]): string[] {
+  return gradientColors(count, stops).map(rgbToHex);
+}
+
 /** Wrap each line of `text` in a 24-bit color from a vertical gradient. */
 export function gradientText(text: string, stops: string[]): string {
   const lines = text.split('\n');
