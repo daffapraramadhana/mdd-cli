@@ -5,12 +5,13 @@ import type { ToolSchema } from '../tools/types.js';
 
 type ClientFactory = (apiKey: string) => Anthropic;
 
-function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
+export function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
   return messages.map((m) => ({
     role: m.role,
     content: m.content.map((b) => {
       if (b.type === 'text') return { type: 'text' as const, text: b.text };
       if (b.type === 'tool_use') return { type: 'tool_use' as const, id: b.id, name: b.name, input: b.input };
+      if (b.type === 'image') return { type: 'image' as const, source: { type: 'base64' as const, media_type: b.mediaType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: b.data } };
       return { type: 'tool_result' as const, tool_use_id: b.toolUseId, content: b.content, is_error: b.isError };
     }),
   }));

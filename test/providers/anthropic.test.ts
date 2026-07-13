@@ -64,3 +64,25 @@ describe('AnthropicProvider', () => {
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'tool_use' });
   });
 });
+
+import { toAnthropicMessages } from '../../src/providers/anthropic.js';
+import type { Message } from '../../src/types.js';
+
+describe('toAnthropicMessages image mapping', () => {
+  it('maps an ImageBlock to a base64 image source alongside text', () => {
+    const messages: Message[] = [{
+      role: 'user',
+      content: [
+        { type: 'text', text: 'what is this?' },
+        { type: 'image', mediaType: 'image/png', data: 'QUJD' },
+      ],
+    }];
+    expect(toAnthropicMessages(messages)).toEqual([{
+      role: 'user',
+      content: [
+        { type: 'text', text: 'what is this?' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'QUJD' } },
+      ],
+    }]);
+  });
+});

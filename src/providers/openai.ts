@@ -5,12 +5,13 @@ import type { ToolSchema } from '../tools/types.js';
 
 type ClientFactory = (apiKey: string, baseURL?: string) => OpenAI;
 
-function toOpenAIMessages(messages: Message[], systemPrompt: string): OpenAI.Chat.ChatCompletionMessageParam[] {
+export function toOpenAIMessages(messages: Message[], systemPrompt: string): OpenAI.Chat.ChatCompletionMessageParam[] {
   const out: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }];
   for (const m of messages) {
     const text = m.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
     const toolUses = m.content.filter((b) => b.type === 'tool_use') as Array<{ id: string; name: string; input: unknown }>;
     const toolResults = m.content.filter((b) => b.type === 'tool_result') as Array<{ toolUseId: string; content: string }>;
+    const images = m.content.filter((b) => b.type === 'image') as Array<{ mediaType: string; data: string }>;
     if (m.role === 'assistant') {
       out.push({
         role: 'assistant',
@@ -21,7 +22,17 @@ function toOpenAIMessages(messages: Message[], systemPrompt: string): OpenAI.Cha
       });
     } else {
       for (const tr of toolResults) out.push({ role: 'tool', tool_call_id: tr.toolUseId, content: tr.content });
-      if (text) out.push({ role: 'user', content: text });
+      if (images.length) {
+        out.push({
+          role: 'user',
+          content: [
+            ...(text ? [{ type: 'text' as const, text }] : []),
+            ...images.map((img) => ({ type: 'image_url' as const, image_url: { url: `data:${img.mediaType};base64,${img.data}` } })),
+          ],
+        });
+      } else if (text) {
+        out.push({ role: 'user', content: text });
+      }
     }
   }
   return out;
