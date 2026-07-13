@@ -46,6 +46,10 @@ async function resolveSetup(opts: RunOpts) {
   return { provider, model, config };
 }
 
+export function hasKeyFor(config: Config, name: 'anthropic' | 'openai'): boolean {
+  return name === 'anthropic' ? !!config.anthropicApiKey : !!config.openaiApiKey;
+}
+
 async function authLogin(): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -193,7 +197,17 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
 }
 
 async function repl(opts: RunOpts): Promise<void> {
-  const config = await loadConfig();
+  let config = await loadConfig();
+
+  // Guided first run: no key configured yet → walk the user through setup, then continue.
+  const wanted = opts.provider ?? config.defaultProvider;
+  if (!hasKeyFor(config, wanted)) {
+    process.stdout.write('\nWelcome to mdd! Let\'s get you set up (one time).\n\n');
+    await authLogin();
+    process.stdout.write('\n');
+    config = await loadConfig();
+  }
+
   const cwd = process.cwd();
   const branch = gitBranch(cwd);
   const store = new UiStore();

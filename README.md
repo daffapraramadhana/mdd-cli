@@ -1,84 +1,101 @@
 # mdd
 
-MDD's internal terminal coding assistant. Multi-provider (Anthropic + OpenAI),
-reads and edits files, runs shell/git — with confirmation before any change.
-Interactive terminal UI built on ink.
+MDD's terminal coding assistant. Chat with an AI agent that reads and edits files,
+runs shell/git, and streams its work in a polished terminal UI — multi-provider
+(Anthropic + OpenAI-compatible, including 9router), with confirmation before any change.
 
-## Install
+---
 
-```bash
-npm install -g @mdd/cli   # or: npm i -g <git-url>
-```
+## Quick start (for MDD teammates)
 
-## Setup
+**1. Install** (needs [Node.js](https://nodejs.org) 20+):
 
 ```bash
-mdd auth login   # store your Anthropic and/or OpenAI API key
+npm install -g mdd-cli
 ```
 
-## Usage
+**2. Run it** — the first time, it walks you through setup automatically:
 
 ```bash
-mdd                                     # interactive REPL (ink UI)
-mdd "add a health check and run tests"  # one-shot
-mdd --provider openai --model gpt-5 "explain this repo"
-mdd --yes "reformat src/**/*.ts"        # auto-approve mutations (use with care)
-mdd models                              # list commonly-used model ids
+mdd
 ```
 
-Mutating tools (write/edit files, shell, git) prompt for confirmation unless
-`--yes` is set. Read-only tools run without prompting. Ctrl-C exits the REPL.
-
-`--model` accepts any id; `mdd models` prints the common ones.
-
-### In-REPL commands
-
-Inside the REPL, lines starting with `/` are commands (not sent to the model):
+You'll be asked which provider and for your API key. **To use the company 9router**,
+choose `openai`, paste your 9router key (from the 9router dashboard), and when it asks
+for the base URL enter:
 
 ```
-/model [id]        show or switch the model (takes effect next turn)
-/models            pick a model with ↑/↓ and enter
+http://localhost:20128/v1
+```
+
+Then pick a model with `/models` (e.g. `cc/claude-sonnet-5`) and start chatting.
+
+That's it. 🎉
+
+**Update later:**
+
+```bash
+npm install -g mdd-cli@latest
+```
+
+---
+
+## Everyday use
+
+```bash
+mdd                                     # interactive chat (fullscreen TUI)
+mdd "add a health check and run tests"  # one-shot: answer and exit
+mdd --yes "reformat src/**/*.ts"        # auto-approve file/shell changes (careful!)
+```
+
+Mutating tools (write/edit files, shell, git) ask for confirmation. Read-only tools
+run silently. Your conversation prints to the terminal when you exit, so it stays in
+your scrollback.
+
+### In-chat commands
+
+Type these inside the chat (a leading `/` means it's a command, not a prompt):
+
+```
+/models            pick a model with ↑/↓ and Enter
+/model [id]        show or switch the model directly
 /provider <name>   switch provider: anthropic | openai
 /theme [name]      switch theme: neon | ocean | mono
-/help              show this help
+/help              list commands
 /exit              quit (or press Ctrl-C)
 ```
 
-The REPL runs as a fullscreen TUI (header box on top, input pinned at the
-bottom). Scroll earlier messages with PageUp / PageDown. The status bar shows
-the active provider · model, working directory, and git branch, and updates
-live when you switch. One-shot (`mdd "…"`) stays inline so its output pipes
-cleanly.
+`PageUp` / `PageDown` scroll earlier messages. The status bar shows the active
+provider · model, working directory, and git branch.
 
-## Using 9router (or any OpenAI-compatible endpoint)
+---
 
-[9router](https://github.com/decolua/9router) exposes an OpenAI-compatible API, so
-`mdd` talks to it through the `openai` provider — point it at 9router's base URL and
-use a 9router model id:
+## 9router (and any OpenAI-compatible endpoint)
+
+`mdd` reaches 9router through the `openai` provider — you just point it at the base URL
+and use a 9router model id. The setup wizard stores this for you, or per-invocation:
 
 ```bash
-mdd auth login   # choose openai; paste your 9router key; enter base URL when prompted,
-                 # e.g. http://localhost:20128/v1
-
-# or per-invocation, without storing it:
 mdd --provider openai \
     --base-url http://localhost:20128/v1 \
-    --model cc/claude-opus-4-8 \
+    --model cc/claude-sonnet-5 \
     "explain this repo"
 ```
 
 `mdd models` lists the known 9router (`cc/*`) ids. Base-URL precedence:
 `--base-url` flag → `OPENAI_BASE_URL` env → stored config → OpenAI's default.
 
-Note: `mdd`'s tools need the routed backend to support streamed OpenAI **function
-calling**; if a model returns text but never invokes tools, that backend likely
-doesn't support tool calls in the OpenAI format.
+> The routed model must support streamed OpenAI **function calling** for tools to fire.
+> If a model replies with text but never runs a tool, that backend doesn't support it.
+
+---
 
 ## Config
 
-`~/.config/mdd/config.json` (mode 0600). Env overrides: `ANTHROPIC_API_KEY`,
-`OPENAI_API_KEY`, `OPENAI_BASE_URL`.
+Stored at `~/.config/mdd/config.json` (mode `0600`). Re-run setup any time with
+`mdd auth login`. Environment overrides: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`OPENAI_BASE_URL`.
 
-## Roadmap (v2)
+## Roadmap
 
-GitLab and Odoo tools (read-only first), central secrets, richer ink views.
+GitLab and Odoo tools (read-only first), token/cost meter, central secrets.

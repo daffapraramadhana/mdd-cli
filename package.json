@@ -4,9 +4,18 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsup",
-    "dev": "tsx src/cli.ts"
+    "dev": "tsx src/cli.ts",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": [],
+  "keywords": [
+    "cli",
+    "ai",
+    "coding-assistant",
+    "anthropic",
+    "openai",
+    "terminal",
+    "tui"
+  ],
   "author": "MDD",
   "license": "UNLICENSED",
   "description": "MDD internal terminal coding assistant",
@@ -37,5 +46,8 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
