@@ -22,7 +22,18 @@ describe('createGate', () => {
     let seen = '';
     const gate = createGate({ confirm: async (spec) => { seen = (spec.body ?? []).join(' '); return { value: 'yes' }; } });
     const d = await gate.check(tool(), { args: 'log --oneline -15' });
-    expect(seen).toContain('git(log --oneline -15)'); // via formatToolCall, not raw JSON
+    expect(seen).toContain('git log --oneline -15'); // full form on the consent card, not raw JSON
+    expect(d).toEqual({ allow: true });
+  });
+
+  it('shows the FULL untruncated run_shell command on the confirmation card', async () => {
+    let seen = '';
+    const gate = createGate({ confirm: async (spec) => { seen = (spec.body ?? []).join(' '); return { value: 'yes' }; } });
+    const longCommand = 'find . -type f -name "*.test.ts" -exec grep -l "describe(" {} \\; | sort | uniq -c';
+    expect(longCommand.length).toBeGreaterThan(60);
+    const d = await gate.check(tool({ name: 'run_shell' }), { command: longCommand });
+    expect(seen).toContain(longCommand); // full command present, not sliced
+    expect(seen).not.toContain('…'); // never truncated on the consent surface
     expect(d).toEqual({ allow: true });
   });
 
