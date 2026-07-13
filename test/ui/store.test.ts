@@ -108,4 +108,63 @@ describe('UiStore', () => {
     ]);
     expect(s.getState().streaming).toBe('');
   });
+
+  it('accumulates reasoning and stamps the start time on the first delta', () => {
+    let t = 200;
+    const s = new UiStore(() => t);
+    s.appendReasoning('let me ');
+    t = 999; // later deltas must NOT move the start stamp
+    s.appendReasoning('think');
+    expect(s.getState().reasoning).toBe('let me think');
+    expect(s.getState().transcript).toEqual([]); // not collapsed yet
+  });
+
+  it('collapses reasoning to a summary when the first answer text arrives', () => {
+    let t = 100;
+    const s = new UiStore(() => t);
+    s.appendReasoning('pondering');
+    t = 450;
+    s.appendStreaming('Here is the answer');
+    expect(s.getState().reasoning).toBe('');
+    expect(s.getState().reasoningStartedAt).toBeNull();
+    expect(s.getState().streaming).toBe('Here is the answer');
+    expect(s.getState().transcript).toEqual([{ kind: 'reasoning', durationMs: 350 }]);
+  });
+
+  it('collapses reasoning before a tool call that has no preceding answer text', () => {
+    let t = 0;
+    const s = new UiStore(() => t);
+    s.appendReasoning('I should read the file');
+    t = 120;
+    s.startTool('read_file', { path: 'a' });
+    expect(s.getState().reasoning).toBe('');
+    expect(s.getState().transcript).toEqual([{ kind: 'reasoning', durationMs: 120 }]);
+    expect(s.getState().activeTool).toEqual({ name: 'read_file', input: { path: 'a' }, startedAt: 120 });
+  });
+
+  it('collapses trailing reasoning at turn end via commitStreaming', () => {
+    let t = 10;
+    const s = new UiStore(() => t);
+    s.appendReasoning('unfinished thought');
+    t = 60;
+    s.commitStreaming();
+    expect(s.getState().reasoning).toBe('');
+    expect(s.getState().transcript).toEqual([{ kind: 'reasoning', durationMs: 50 }]);
+  });
+
+  it('emits only one reasoning summary per round even with interleaved answer deltas', () => {
+    const s = new UiStore(() => 0);
+    s.appendReasoning('think');
+    s.appendStreaming('a');
+    s.appendStreaming('b'); // second answer delta must not add another summary
+    const reasoningItems = s.getState().transcript.filter((i) => i.kind === 'reasoning');
+    expect(reasoningItems).toHaveLength(1);
+  });
+
+  it('produces no summary when there was no reasoning', () => {
+    const s = new UiStore(() => 0);
+    s.appendStreaming('just an answer');
+    s.commitStreaming();
+    expect(s.getState().transcript).toEqual([{ kind: 'assistant', text: 'just an answer' }]);
+  });
 });
