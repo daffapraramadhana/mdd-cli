@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Box, Text, Static } from 'ink';
+import { Box, Text, Static, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 import { sanitizeInput } from './scroll.js';
 import type { UiStore, TranscriptItem } from './store.js';
@@ -78,6 +78,8 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
   const [tick, setTick] = useState(0);
+  const { stdout } = useStdout();
+  const width = Math.max(8, (stdout?.columns ?? 80));
 
   const theme = getTheme(state.themeName);
   const animating = state.activeTool !== null || state.status === 'busy' || state.streaming !== '';
@@ -90,12 +92,13 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
   }, [animating]);
 
   const handleSubmit = (v: string) => {
+    if (state.pendingPrompt !== null) { setValue(''); store.resolvePrompt(v); return; }
+    // A turn is running: keep the draft in the box (don't clear, don't send) until it's idle.
+    if (state.status === 'busy') return;
     setValue('');
-    if (state.pendingPrompt !== null) { store.resolvePrompt(v); return; }
     if (v.trim()) onSubmit(v.trim());
   };
 
-  const inputActive = state.pendingPrompt !== null || state.status === 'idle';
   const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool;
   const meta = state.meta;
 
@@ -128,6 +131,9 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
     </>
   );
 
+  // Claude-style input chrome: a full-width horizontal rule, then a `>` prompt that stays pinned
+  // at the bottom at all times — even mid-turn (busy). While a turn runs, keystrokes still edit
+  // the draft, but Enter is held (see handleSubmit) so nothing is sent until the turn finishes.
   const bottom = state.pendingSelect ? (
     <SelectList
       title={state.pendingSelect.title}
@@ -136,15 +142,19 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
       onCancel={() => store.resolveSelect(null)}
       accent={theme.accent}
     />
-  ) : inputActive ? (
-    <Box borderStyle="round" borderColor={theme.accent} borderTop={false} borderRight={false} borderBottom={false} paddingLeft={1}>
-      {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
-      <TextInput value={value} onChange={(v) => setValue(sanitizeInput(v))} onSubmit={handleSubmit} />
-      {/* Own dim hint instead of ink-text-input's placeholder, so the cursor is a clean
-          block and not an inverted first letter ("A"). Disappears once you type. */}
-      {state.pendingPrompt === null && value === '' ? <Text dimColor> Ask anything…</Text> : null}
+  ) : (
+    <Box flexDirection="column">
+      <Text dimColor>{'─'.repeat(width)}</Text>
+      <Box paddingLeft={1}>
+        <Text color={theme.accent}>{'> '}</Text>
+        {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
+        <TextInput value={value} onChange={(v) => setValue(sanitizeInput(v))} onSubmit={handleSubmit} />
+        {/* Own dim hint instead of ink-text-input's placeholder, so the cursor is a clean
+            block and not an inverted first letter ("A"). Only when idle + empty. */}
+        {state.status === 'idle' && state.pendingPrompt === null && value === '' ? <Text dimColor>Ask anything…</Text> : null}
+      </Box>
     </Box>
-  ) : null;
+  );
 
   const statusBar = meta ? (
     <Box flexDirection="column">
@@ -165,7 +175,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
       <Static items={staticItems}>{(el) => el}</Static>
       {liveRows}
       {bottom ? <Box marginTop={1}>{bottom}</Box> : null}
-      {statusBar ? <Box marginTop={inputActive ? 0 : 1}>{statusBar}</Box> : null}
+      {statusBar ? <Box marginTop={state.pendingSelect ? 1 : 0}>{statusBar}</Box> : null}
     </Box>
   );
 }

@@ -112,6 +112,28 @@ describe('App', () => {
     expect(lastFrame()).toContain('Ask anything');
   });
 
+  it('keeps the input prompt pinned at the bottom while a turn is running (busy)', () => {
+    const store = new UiStore();
+    store.setStatus('busy');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('thinking'); // busy indicator is shown
+    expect(frame).toContain('>');        // …and the input prompt is still visible
+  });
+
+  it('draws a full-width separator rule above the input (claude-style chrome)', () => {
+    const store = new UiStore();
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame() ?? '').toContain('──────'); // horizontal rule above the prompt
+  });
+
+  it('does not show the placeholder while busy (only when idle)', () => {
+    const store = new UiStore();
+    store.setStatus('busy');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame() ?? '').not.toContain('Ask anything');
+  });
+
   it('does not leak a typed/pasted mouse sequence into the input field', () => {
     const store = new UiStore();
     const { lastFrame, stdin } = render(<App store={store} onSubmit={() => {}} />);
