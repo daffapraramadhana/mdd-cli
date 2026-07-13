@@ -1,9 +1,10 @@
 import { render } from 'ink';
-import { App } from './app.js';
+import { App, type SubmitInput } from './app.js';
 import { UiStore } from './store.js';
 
 export { UiStore } from './store.js';
 export type { TranscriptItem, UiState } from './store.js';
+export type { SubmitInput } from './app.js';
 export { formatBanner, formatStatus, formatPath, shortenCwd, type SessionMeta } from './banner.js';
 
 // Clear the screen AND the scrollback, then home the cursor. Run once at REPL startup so the
@@ -19,7 +20,7 @@ const CLEAR_ALL = '\x1b[2J\x1b[3J\x1b[H';
 // REPL); one-shot mode omits both so piped output stays clean.
 export function mountApp(
   store: UiStore,
-  onSubmit: (line: string) => void,
+  onSubmit: (input: SubmitInput) => void,
   opts: { showHeader?: boolean } = {},
 ): { unmount(): void; waitUntilExit(): Promise<void> } {
   if (opts.showHeader) process.stdout.write(CLEAR_ALL);
