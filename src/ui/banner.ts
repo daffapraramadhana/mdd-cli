@@ -7,6 +7,7 @@ export interface SessionMeta {
   model: string;
   cwd: string;
   autoApprove?: boolean;
+  branch?: string;
 }
 
 /** A boxed MDD header, printed once to stdout at REPL start (above ink's output). */
@@ -25,9 +26,14 @@ export function shortenCwd(cwd: string, home: string): string {
   return cwd;
 }
 
-/** The dim footer content: `provider · model · cwd[ · auto-approve]`. */
+/** The status-line content next to the `mdd` badge: `provider · model[ · auto-approve]`. */
 export function formatStatus(meta: SessionMeta): string {
-  const parts = [meta.provider, meta.model, meta.cwd];
+  const parts = [meta.provider, meta.model];
   if (meta.autoApprove) parts.push('auto-approve');
   return parts.join(' · ');
+}
+
+/** The path line: `cwd[ (branch)]`. */
+export function formatPath(meta: SessionMeta): string {
+  return meta.branch ? `${meta.cwd} (${meta.branch})` : meta.cwd;
 }

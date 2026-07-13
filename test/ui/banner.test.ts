@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBanner, formatStatus, shortenCwd } from '../../src/ui/banner.js';
+import { formatBanner, formatStatus, formatPath, shortenCwd } from '../../src/ui/banner.js';
 
 describe('formatBanner', () => {
   it('renders a boxed MDD header with the version', () => {
@@ -30,13 +30,22 @@ describe('shortenCwd', () => {
 });
 
 describe('formatStatus', () => {
-  it('joins provider, model and cwd', () => {
-    expect(formatStatus({ provider: 'openai', model: 'gpt-5', cwd: '~/p' })).toBe('openai · gpt-5 · ~/p');
+  it('joins provider and model', () => {
+    expect(formatStatus({ provider: 'openai', model: 'gpt-5', cwd: '~/p' })).toBe('openai · gpt-5');
   });
   it('appends auto-approve only when enabled', () => {
     expect(formatStatus({ provider: 'anthropic', model: 'claude-opus-4-8', cwd: '~/p', autoApprove: true }))
-      .toBe('anthropic · claude-opus-4-8 · ~/p · auto-approve');
+      .toBe('anthropic · claude-opus-4-8 · auto-approve');
     expect(formatStatus({ provider: 'anthropic', model: 'x', cwd: '~/p', autoApprove: false }))
       .not.toContain('auto-approve');
+  });
+});
+
+describe('formatPath', () => {
+  it('shows cwd alone when there is no branch', () => {
+    expect(formatPath({ provider: 'openai', model: 'x', cwd: '~/proj' })).toBe('~/proj');
+  });
+  it('appends the branch in parentheses when present', () => {
+    expect(formatPath({ provider: 'openai', model: 'x', cwd: '~/proj', branch: 'main' })).toBe('~/proj (main)');
   });
 });

@@ -1,17 +1,21 @@
+import type { SessionMeta } from './banner.js';
+
 export type TranscriptItem =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
-  | { kind: 'tool'; name: string; input: unknown };
+  | { kind: 'tool'; name: string; input: unknown }
+  | { kind: 'system'; text: string };
 
 export interface UiState {
   transcript: TranscriptItem[];
   streaming: string;
   status: 'idle' | 'busy';
   pendingPrompt: string | null;
+  meta: SessionMeta | null;
 }
 
 export class UiStore {
-  private state: UiState = { transcript: [], streaming: '', status: 'idle', pendingPrompt: null };
+  private state: UiState = { transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
 
@@ -48,7 +52,13 @@ export class UiStore {
     this.set({ transcript: [...this.state.transcript, { kind: 'tool', name, input }] });
   };
 
+  addSystem = (text: string): void => {
+    this.set({ transcript: [...this.state.transcript, { kind: 'system', text }] });
+  };
+
   setStatus = (status: 'idle' | 'busy'): void => { this.set({ status }); };
+
+  setMeta = (meta: SessionMeta): void => { this.set({ meta }); };
 
   requestPrompt = (message: string): Promise<string> =>
     new Promise((resolve) => { this.resolver = resolve; this.set({ pendingPrompt: message }); });

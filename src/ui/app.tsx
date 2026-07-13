@@ -3,9 +3,10 @@ import { useState, useSyncExternalStore } from 'react';
 import { Box, Text, Static } from 'ink';
 import TextInput from 'ink-text-input';
 import type { UiStore, TranscriptItem } from './store.js';
-import { formatStatus, type SessionMeta } from './banner.js';
+import { formatStatus, formatPath } from './banner.js';
 
 const GUTTER = 5;
+const HINTS = '/model  /models  /provider  /help';
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {
   return (
@@ -25,6 +26,14 @@ function renderItem(item: TranscriptItem, key: number) {
   if (item.kind === 'assistant') {
     return <Row key={key} label="MDD" color="magenta"><Text>{item.text}</Text></Row>;
   }
+  if (item.kind === 'system') {
+    return (
+      <Box key={key} marginTop={1}>
+        <Box width={GUTTER} flexShrink={0}><Text> </Text></Box>
+        <Text dimColor>{item.text}</Text>
+      </Box>
+    );
+  }
   return (
     <Box key={key}>
       <Box width={GUTTER} flexShrink={0}><Text> </Text></Box>
@@ -33,15 +42,7 @@ function renderItem(item: TranscriptItem, key: number) {
   );
 }
 
-export function App({
-  store,
-  onSubmit,
-  meta,
-}: {
-  store: UiStore;
-  onSubmit: (line: string) => void;
-  meta?: SessionMeta;
-}) {
+export function App({ store, onSubmit }: { store: UiStore; onSubmit: (line: string) => void }) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
 
@@ -53,6 +54,7 @@ export function App({
 
   const inputActive = state.pendingPrompt !== null || state.status === 'idle';
   const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming;
+  const meta = state.meta;
 
   return (
     <Box flexDirection="column">
@@ -65,16 +67,34 @@ export function App({
         <Row label="MDD" color="magenta"><Text dimColor>…thinking</Text></Row>
       ) : null}
 
-      {meta ? (
-        <Box marginTop={1}>
-          <Text dimColor>{formatStatus(meta)}</Text>
+      {inputActive ? (
+        <Box
+          marginTop={1}
+          borderStyle="round"
+          borderColor="magenta"
+          borderTop={false}
+          borderRight={false}
+          borderBottom={false}
+          paddingLeft={1}
+        >
+          {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
+          <TextInput
+            value={value}
+            onChange={setValue}
+            onSubmit={handleSubmit}
+            placeholder={state.pendingPrompt !== null ? undefined : 'Ask anything…'}
+          />
         </Box>
       ) : null}
 
-      {inputActive ? (
-        <Box>
-          <Text color="cyan">{state.pendingPrompt ?? '› '}</Text>
-          <TextInput value={value} onChange={setValue} onSubmit={handleSubmit} />
+      {meta ? (
+        <Box flexDirection="column" marginTop={inputActive ? 0 : 1}>
+          <Text>
+            <Text color="magenta" bold>mdd</Text>
+            <Text>{'  '}</Text>
+            <Text dimColor>{formatStatus(meta)}</Text>
+          </Text>
+          <Text dimColor>{`${HINTS}    ${formatPath(meta)} · ctrl-c exit`}</Text>
         </Box>
       ) : null}
     </Box>
