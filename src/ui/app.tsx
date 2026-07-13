@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Box, Text, Static, useInput, useStdout } from 'ink';
+import { Box, Text, Static } from 'ink';
 import TextInput from 'ink-text-input';
+import { sanitizeInput } from './scroll.js';
 import type { UiStore, TranscriptItem } from './store.js';
 import { formatStatus, formatPath } from './banner.js';
 import { formatToolCall, toolIcon } from './format.js';
@@ -15,7 +16,6 @@ import { formatUsage } from '../usage.js';
 
 const GUTTER = 5;
 const HINTS = '/model  /theme  /help  /exit';
-const WINDOW = 200; // max transcript items laid out in the fullscreen viewport
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {
   return (
@@ -52,7 +52,7 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
     );
   }
   if (item.kind === 'assistant') {
-    return <Row key={key} label="MDD" color={theme.assistant}><Markdown text={item.text} codeColor={theme.code} accent={theme.accent} /></Row>;
+    return <Row key={key} label="MDD" color={theme.assistant}><Markdown text={item.text} theme={theme} /></Row>;
   }
   if (item.kind === 'system') {
     return (
@@ -69,13 +69,15 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
   );
 }
 
-export function App({ store, onSubmit, fullscreen = false }: { store: UiStore; onSubmit: (line: string) => void; fullscreen?: boolean }) {
+// The whole REPL renders into the NORMAL terminal buffer: committed history goes through
+// <Static> (printed once, scrolled natively by the terminal — smooth, mouse/trackpad, and
+// selectable), while the live streaming region, input, and status bar re-render in place at
+// the bottom. `showHeader` prints the banner once as the first Static item so it sits at the
+// top of scrollback (like Claude Code) instead of being frozen in an alternate screen.
+export function App({ store, onSubmit, showHeader = false }: { store: UiStore; onSubmit: (line: string) => void; showHeader?: boolean }) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
   const [tick, setTick] = useState(0);
-  const [scrollBack, setScrollBack] = useState(0);
-  const { stdout } = useStdout();
-  const [size, setSize] = useState({ rows: stdout?.rows ?? 24, cols: stdout?.columns ?? 80 });
 
   const theme = getTheme(state.themeName);
   const animating = state.activeTool !== null || state.status === 'busy' || state.streaming !== '';
@@ -86,21 +88,6 @@ export function App({ store, onSubmit, fullscreen = false }: { store: UiStore; o
     (t as { unref?: () => void }).unref?.();
     return () => clearInterval(t);
   }, [animating]);
-
-  useEffect(() => {
-    if (!stdout) return;
-    const on = (): void => setSize({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
-    stdout.on('resize', on);
-    return () => { stdout.off('resize', on); };
-  }, [stdout]);
-
-  useEffect(() => { if (state.status === 'busy') setScrollBack(0); }, [state.status]);
-
-  useInput((_i, key) => {
-    if (state.pendingSelect || state.pendingPrompt) return;
-    if (key.pageUp) setScrollBack((s) => Math.min(s + 3, state.transcript.length));
-    else if (key.pageDown) setScrollBack((s) => Math.max(0, s - 3));
-  }, { isActive: fullscreen });
 
   const handleSubmit = (v: string) => {
     setValue('');
@@ -117,14 +104,18 @@ export function App({ store, onSubmit, fullscreen = false }: { store: UiStore; o
     if (item.kind === 'user') userNum += 1;
     return renderItem(item, i, userNum, theme);
   });
-  const end = allEls.length - scrollBack;
-  const windowEls = allEls.slice(Math.max(0, end - WINDOW), end);
+  const staticItems = showHeader
+    ? [<Header key="hdr" theme={theme} version={VERSION} />, ...allEls]
+    : allEls;
 
   const liveRows = (
     <>
       {state.streaming ? (
         <Row label="MDD" color={theme.assistant}>
-          <Text>{state.streaming}<Text color={theme.assistant}>{cursorFrame(tick)}</Text></Text>
+          <Box flexDirection="column">
+            <Markdown text={state.streaming} theme={theme} />
+            <Text color={theme.assistant}>{cursorFrame(tick)}</Text>
+          </Box>
         </Row>
       ) : null}
       {state.activeTool ? (
@@ -148,7 +139,7 @@ export function App({ store, onSubmit, fullscreen = false }: { store: UiStore; o
   ) : inputActive ? (
     <Box borderStyle="round" borderColor={theme.accent} borderTop={false} borderRight={false} borderBottom={false} paddingLeft={1}>
       {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
-      <TextInput value={value} onChange={setValue} onSubmit={handleSubmit} />
+      <TextInput value={value} onChange={(v) => setValue(sanitizeInput(v))} onSubmit={handleSubmit} />
       {/* Own dim hint instead of ink-text-input's placeholder, so the cursor is a clean
           block and not an inverted first letter ("A"). Disappears once you type. */}
       {state.pendingPrompt === null && value === '' ? <Text dimColor> Ask anything…</Text> : null}
@@ -164,34 +155,14 @@ export function App({ store, onSubmit, fullscreen = false }: { store: UiStore; o
         {state.usage.inputTokens + state.usage.outputTokens > 0
           ? <Text dimColor>{`  · ${formatUsage(state.usage, meta.model)}`}</Text>
           : null}
-        {scrollBack > 0 ? <Text dimColor>{`  ▲ ${scrollBack} up (PgDn to follow)`}</Text> : null}
       </Text>
       <Text dimColor>{`${HINTS}    ${formatPath(meta)} · ctrl-c exit`}</Text>
     </Box>
   ) : null;
 
-  if (fullscreen) {
-    // Fullscreen viewport (alternate screen). On exit, the transcript is re-printed
-    // to the normal buffer (see mountFullscreen) so history persists in scrollback.
-    return (
-      <Box flexDirection="column" height={size.rows} width={size.cols}>
-        <Header theme={theme} version={VERSION} />
-        <Box flexGrow={1} flexDirection="column" overflowY="hidden" justifyContent="flex-end">
-          {windowEls}
-          {scrollBack === 0 ? liveRows : null}
-        </Box>
-        <Box flexDirection="column" marginTop={1}>
-          {bottom}
-          {statusBar}
-        </Box>
-      </Box>
-    );
-  }
-
-  // Inline (one-shot): terminal-scrollback model, no header.
   return (
     <Box flexDirection="column">
-      <Static items={allEls}>{(el) => el}</Static>
+      <Static items={staticItems}>{(el) => el}</Static>
       {liveRows}
       {bottom ? <Box marginTop={1}>{bottom}</Box> : null}
       {statusBar ? <Box marginTop={inputActive ? 0 : 1}>{statusBar}</Box> : null}

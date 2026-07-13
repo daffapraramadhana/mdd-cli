@@ -11,7 +11,7 @@ import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { UiStore, mountApp, mountFullscreen, shortenCwd, type SessionMeta } from './ui/index.js';
+import { UiStore, mountApp, shortenCwd, type SessionMeta } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
 import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
 import { LOGO } from './ui/banner.js';
@@ -311,8 +311,9 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  // Fullscreen REPL; on exit the transcript is dumped to scrollback so history persists.
-  app = mountFullscreen(store, (line) => { void onSubmit(line); });
+  // Interactive REPL in the normal terminal buffer: native smooth scroll, banner at the top
+  // of scrollback, status pinned at the bottom. History persists in scrollback after exit.
+  app = mountApp(store, (line) => { void onSubmit(line); }, { showHeader: true });
   await app.waitUntilExit();
 }
 

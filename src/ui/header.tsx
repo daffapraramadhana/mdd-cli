@@ -22,8 +22,8 @@ export function Header({ theme, version }: { theme: Theme; version: string }) {
     <Box borderStyle="round" borderColor={theme.accent} paddingX={1} justifyContent="space-between">
       <Box flexDirection="column">
         <Logo theme={theme} />
-        <Text dimColor>{`terminal coding assistant · v${version}`}</Text>
-        <Text dimColor>ask Daffa for any question</Text>
+        <Text dimColor>{`multidaya terminal coding assistant · v${version}`}</Text>
+        <Text dimColor>psst.. this is a very early version — any feedback and improvements are very welcome · deepoy (ping me for any question)</Text>
       </Box>
       <Box flexDirection="column" marginLeft={2}>
         <Text color={theme.accent} bold>Commands</Text>

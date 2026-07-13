@@ -11,6 +11,16 @@ describe('App', () => {
     expect(lastFrame()).toContain('hello world');
   });
 
+  it('formats markdown live while streaming (no snap on commit)', () => {
+    const store = new UiStore();
+    store.appendStreaming('Use **npm test** and a heading\n# Heading');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('npm test');
+    expect(frame).toContain('Heading');
+    expect(frame).not.toContain('**'); // markers already stripped mid-stream
+  });
+
   it('renders a completed tool line with a ✓ and prettified args', () => {
     const store = new UiStore();
     store.addUser('list files');
@@ -100,5 +110,14 @@ describe('App', () => {
     const store = new UiStore();
     const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
     expect(lastFrame()).toContain('Ask anything');
+  });
+
+  it('does not leak a typed/pasted mouse sequence into the input field', () => {
+    const store = new UiStore();
+    const { lastFrame, stdin } = render(<App store={store} onSubmit={() => {}} />);
+    stdin.write('hi\x1b[<64;10;5Mthere'); // a wheel sequence embedded in typed text
+    const frame = lastFrame() ?? '';
+    expect(frame).not.toContain('[<64'); // escape sequence stripped
+    expect(frame).not.toContain('64;10;5');
   });
 });

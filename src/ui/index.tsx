@@ -1,47 +1,29 @@
 import { render } from 'ink';
 import { App } from './app.js';
 import { UiStore } from './store.js';
-import { getTheme } from './theme.js';
-import { renderTranscriptText } from './transcript-text.js';
-import { formatUsage } from '../usage.js';
 
 export { UiStore } from './store.js';
 export type { TranscriptItem, UiState } from './store.js';
 export { formatBanner, formatStatus, formatPath, shortenCwd, type SessionMeta } from './banner.js';
 
-// Inline rendering (one-shot): content lands in native scrollback; no header, clean for piping.
-export function mountApp(store: UiStore, onSubmit: (line: string) => void): { unmount(): void; waitUntilExit(): Promise<void> } {
-  const instance = render(<App store={store} onSubmit={onSubmit} />);
-  return {
-    unmount: instance.unmount,
-    waitUntilExit: () => instance.waitUntilExit().then(() => undefined),
-  };
-}
+// Clear the screen AND the scrollback, then home the cursor. Run once at REPL startup so the
+// banner becomes the top of the buffer — scrolling up stops at it instead of bleeding into the
+// pre-existing shell output, exactly like Claude Code. `\x1b[3J` clears scrollback (xterm ext,
+// supported by iTerm2/Terminal.app/Ghostty/etc).
+const CLEAR_ALL = '\x1b[2J\x1b[3J\x1b[H';
 
-const ALT_ENTER = '\x1b[?1049h\x1b[2J\x1b[H'; // enter alternate screen, clear, cursor home
-const ALT_LEAVE = '\x1b[?1049l';             // leave alternate screen (restores the shell)
-
-// Fullscreen REPL: runs in the alternate screen, and on exit re-prints the conversation to
-// the normal buffer so it persists in scrollback (instead of leaving a blank terminal).
-export function mountFullscreen(store: UiStore, onSubmit: (line: string) => void): { unmount(): void; waitUntilExit(): Promise<void> } {
-  process.stdout.write(ALT_ENTER);
-  let cleaned = false;
-  const cleanup = (): void => {
-    if (cleaned) return;
-    cleaned = true;
-    process.stdout.write(ALT_LEAVE);
-    const { transcript, themeName, usage, meta } = store.getState();
-    if (transcript.length) {
-      let out = renderTranscriptText(transcript, getTheme(themeName));
-      if (usage.inputTokens + usage.outputTokens > 0) {
-        out += `\n\x1b[2m${formatUsage(usage, meta?.model ?? '')}\x1b[0m`;
-      }
-      process.stdout.write(out + '\n');
-    }
-  };
-  process.on('exit', cleanup);
-  const instance = render(<App store={store} onSubmit={onSubmit} fullscreen />);
-  void instance.waitUntilExit().finally(() => { cleanup(); process.off('exit', cleanup); });
+// The app renders into the NORMAL terminal buffer (not the alternate screen), so the terminal's
+// own native scrollback handles scrolling — smooth, mouse/trackpad-driven, and text-selectable,
+// just like Claude Code. Committed history is printed via <Static> and stays in scrollback after
+// exit. `showHeader` prints the banner once at the top and clears the terminal first (interactive
+// REPL); one-shot mode omits both so piped output stays clean.
+export function mountApp(
+  store: UiStore,
+  onSubmit: (line: string) => void,
+  opts: { showHeader?: boolean } = {},
+): { unmount(): void; waitUntilExit(): Promise<void> } {
+  if (opts.showHeader) process.stdout.write(CLEAR_ALL);
+  const instance = render(<App store={store} onSubmit={onSubmit} showHeader={opts.showHeader} />);
   return {
     unmount: instance.unmount,
     waitUntilExit: () => instance.waitUntilExit().then(() => undefined),
