@@ -321,4 +321,15 @@ describe('App', () => {
     expect(lastFrame()).toContain('esc to interrupt');
     vi.restoreAllMocks();
   });
+
+  it('renders a pending choice prompt via SelectList', () => {
+    const store = new UiStore();
+    store.setMeta({ provider: 'anthropic', model: 'm', cwd: '~/x', autoApprove: false });
+    void store.requestChoice({ title: 'run this?', body: ['git status'], options: [{ label: 'yes', value: 'y' }] });
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('run this?');
+    expect(frame).toContain('git status');
+    expect(frame).toContain('❯ yes');
+  });
 });

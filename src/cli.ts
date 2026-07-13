@@ -174,7 +174,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const store = new UiStore();
   store.setTheme(config.theme ?? DEFAULT_THEME);
   store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, gitBranch(cwd)));
-  const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
+  const gate = createGate({ confirm: store.requestChoice, autoApprove: opts.yes });
   const app = mountApp(store, () => {});
   store.addUser(prompt);
   store.setStatus('busy');
@@ -185,6 +185,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
       provider, registry: buildRegistry(), gate, cwd, model,
       systemPrompt: buildSystemPrompt(cwd),
       onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
+      ask: store.requestAsk,
     });
     h.flush();
   } catch (err) {
@@ -293,7 +294,7 @@ async function repl(opts: RunOpts): Promise<void> {
   const cwd = process.cwd();
   const branch = gitBranch(cwd);
   const store = new UiStore();
-  const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
+  const gate = createGate({ confirm: store.requestChoice, autoApprove: opts.yes });
   const registry = buildRegistry();
   const systemPrompt = buildSystemPrompt(cwd);
   const messages: Message[] = [];
@@ -336,7 +337,11 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const pickModel = (): void => {
     void (async () => {
-      const chosen = await store.requestSelect('Select a model  (↑/↓ · enter · esc)', KNOWN_MODELS.map((m) => m.id));
+      const result = await store.requestChoice({
+        title: 'Select a model  (↑/↓ · enter · esc)',
+        options: KNOWN_MODELS.map((m) => ({ label: m.id, value: m.id })),
+      });
+      const chosen = result?.value;
       if (chosen) { session.model = chosen; refreshMeta(); store.addSystem(`→ model set to ${chosen}`); }
     })();
   };
@@ -347,7 +352,11 @@ async function repl(opts: RunOpts): Promise<void> {
       if (!summaries.length) { store.addSystem('No sessions to resume.'); return; }
       const now = Date.now();
       const labels = summaries.map((s) => sessionOptionLabel(s, now));
-      const chosen = await store.requestSelect('Resume a session  (↑/↓ · enter · esc)', labels);
+      const result = await store.requestChoice({
+        title: 'Resume a session  (↑/↓ · enter · esc)',
+        options: labels.map((l) => ({ label: l, value: l })),
+      });
+      const chosen = result?.value;
       if (!chosen) return;
       const idx = labels.indexOf(chosen);
       if (idx < 0) return;
@@ -389,6 +398,7 @@ async function repl(opts: RunOpts): Promise<void> {
         provider: session.provider, registry, gate, cwd, model: session.model, systemPrompt,
         onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
         signal: controller.signal,
+        ask: store.requestAsk,
       });
       h.flush();
     } catch (err) {

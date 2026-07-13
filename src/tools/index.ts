@@ -8,9 +8,10 @@ import { runShellTool } from './run-shell.js';
 import { gitTool } from './git.js';
 import { searchTool } from './search.js';
 import { multiEditTool } from './multi-edit.js';
+import { askUserTool } from './ask-user.js';
 
 export const allTools: Tool[] = [
-  readFileTool, listDirTool, searchTool, writeFileTool, editFileTool, multiEditTool, runShellTool, gitTool,
+  readFileTool, listDirTool, searchTool, writeFileTool, editFileTool, multiEditTool, runShellTool, gitTool, askUserTool,
 ];
 
 export function buildRegistry(): ToolRegistry {

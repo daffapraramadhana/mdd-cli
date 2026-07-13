@@ -17,6 +17,7 @@ export interface AgentDeps {
   onToolEnd?: (isError: boolean, content?: string) => void;
   onUsage?: (inputTokens: number, outputTokens: number) => void;
   signal?: AbortSignal;
+  ask?: (question: string, options?: string[]) => Promise<string>;
 }
 
 export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Message[]> {
@@ -51,13 +52,16 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
         continue;
       }
       const decision = await deps.gate.check(tool, use.input);
-      if (decision === 'deny') {
-        results.push({ type: 'tool_result', toolUseId: use.id, content: 'User denied this tool call.', isError: true });
-        deps.onToolEnd?.(true, 'User denied this tool call.');
+      if (!decision.allow) {
+        const msg = decision.reason
+          ? `User denied this tool call. They said: ${decision.reason}`
+          : 'User denied this tool call.';
+        results.push({ type: 'tool_result', toolUseId: use.id, content: msg, isError: true });
+        deps.onToolEnd?.(true, msg);
         continue;
       }
       try {
-        const r = await tool.handler(use.input, { cwd: deps.cwd });
+        const r = await tool.handler(use.input, { cwd: deps.cwd, ask: deps.ask });
         results.push({ type: 'tool_result', toolUseId: use.id, content: r.content, isError: r.isError });
         deps.onToolEnd?.(r.isError, r.content);
       } catch (err) {

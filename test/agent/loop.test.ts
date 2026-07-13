@@ -25,7 +25,7 @@ describe('runTurn', () => {
     ]);
     const messages: Message[] = [{ role: 'user', content: [{ type: 'text', text: 'read a.txt' }] }];
     const out = await runTurn(messages, {
-      provider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      provider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
       cwd: dir, model: 'x', systemPrompt: 's',
     });
     const toolResult = out.flatMap((m) => m.content).find((b) => b.type === 'tool_result') as { content: string } | undefined;
@@ -44,7 +44,7 @@ describe('runTurn', () => {
       [{ type: 'text', text: 'done' }, { type: 'done', stopReason: 'end' }],
     ]);
     await runTurn([{ role: 'user', content: [{ type: 'text', text: 'read' }] }], {
-      provider: okProvider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      provider: okProvider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
       cwd: dir, model: 'x', systemPrompt: 's',
       onToolStart: (name) => events.push(`start:${name}`),
       onToolEnd: (isError) => events.push(`end:${isError}`),
@@ -58,7 +58,7 @@ describe('runTurn', () => {
       [{ type: 'text', text: 'skipped' }, { type: 'done', stopReason: 'end' }],
     ]);
     await runTurn([{ role: 'user', content: [{ type: 'text', text: 'write' }] }], {
-      provider: denyProvider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'n' }),
+      provider: denyProvider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'no' }) }),
       cwd: dir, model: 'x', systemPrompt: 's',
       onToolStart: (name) => denyEvents.push(`start:${name}`),
       onToolEnd: (isError) => denyEvents.push(`end:${isError}`),
@@ -72,7 +72,7 @@ describe('runTurn', () => {
       [{ type: 'text', text: 'ok, skipped' }, { type: 'done', stopReason: 'end' }],
     ]);
     const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'write x' }] }], {
-      provider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'n' }),
+      provider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'no' }) }),
       cwd: dir, model: 'x', systemPrompt: 's',
     });
     const tr = out.flatMap((m) => m.content).find((b) => b.type === 'tool_result') as { content: string; isError: boolean } | undefined;
@@ -95,7 +95,7 @@ describe('runTurn', () => {
       [{ type: 'text', text: 'handled' }, { type: 'done', stopReason: 'end' }],
     ]);
     const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'trigger boom' }] }], {
-      provider, registry, gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      provider, registry, gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
       cwd: dir, model: 'x', systemPrompt: 's',
     });
     const tr = out.flatMap((m) => m.content).find((b) => b.type === 'tool_result') as { content: string; isError: boolean } | undefined;
@@ -110,7 +110,7 @@ describe('runTurn', () => {
       [{ type: 'text', text: 'done' }, { type: 'done', stopReason: 'end' }],
     ]);
     const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'call a bogus tool' }] }], {
-      provider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      provider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
       cwd: dir, model: 'x', systemPrompt: 's',
     });
     const tr = out.flatMap((m) => m.content).find((b) => b.type === 'tool_result') as { content: string; isError: boolean } | undefined;
@@ -127,7 +127,7 @@ describe('runTurn', () => {
       [{ type: 'text', text: 'done' }, { type: 'done', stopReason: 'end' }],
     ]);
     await runTurn([{ role: 'user', content: [{ type: 'text', text: 'read' }] }], {
-      provider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      provider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
       cwd: dir, model: 'x', systemPrompt: 's',
       onToolEnd: (isError, content) => seen.push({ isError, content }),
     });
@@ -144,11 +144,25 @@ describe('runTurn', () => {
       },
     };
     const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'keep going forever' }] }], {
-      provider: infiniteProvider, registry: buildRegistry(), gate: createGate({ prompt: async () => 'y', autoApprove: true }),
+      provider: infiniteProvider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
       cwd: dir, model: 'x', systemPrompt: 's',
     });
     const last = out.at(-1)!;
     expect(last.role).toBe('assistant');
     expect(last.content.some((b) => b.type === 'text' && /stopped after 50/i.test(b.text))).toBe(true);
+  });
+
+  it('routes an ask_user tool call to the ask() dep and feeds the answer back', async () => {
+    const provider = new FakeProvider([
+      [{ type: 'tool_use', id: 'q1', name: 'ask_user', input: { question: 'which pm?', options: ['pnpm', 'npm'] } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'ok, pnpm it is' }, { type: 'done', stopReason: 'end' }],
+    ]);
+    const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'set up scripts' }] }], {
+      provider, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }) }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+      ask: async () => 'pnpm',
+    });
+    const tr = out.flatMap((m) => m.content).find((b) => b.type === 'tool_result') as { content: string } | undefined;
+    expect(tr?.content).toBe('pnpm');
   });
 });
