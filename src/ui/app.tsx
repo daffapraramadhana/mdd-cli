@@ -151,6 +151,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
           <Box flexDirection="column">
             <Markdown text={state.streaming} theme={theme} />
             <Text color={theme.assistant}>{cursorFrame(tick)}</Text>
+            {state.turnStartedAt !== null ? <Text dimColor>{`  ${fmtElapsed(Date.now() - state.turnStartedAt)}  esc to interrupt`}</Text> : null}
           </Box>
         </Row>
       ) : null}
@@ -160,7 +161,13 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
           text={`${toolIcon(state.activeTool.name)} ${formatToolCall(state.activeTool.name, state.activeTool.input)}`} />
       ) : null}
       {thinking ? (
-        <Row label="MDD" color={theme.assistant}><Text dimColor>{`thinking${thinkingDots(tick)}`}</Text></Row>
+        <Row label="MDD" color={theme.assistant}>
+          <Text dimColor>
+            {`thinking${thinkingDots(tick)}`}
+            {state.turnStartedAt !== null ? `   ${fmtElapsed(Date.now() - state.turnStartedAt)}` : ''}
+            {'   esc to interrupt'}
+          </Text>
+        </Row>
       ) : null}
     </>
   );

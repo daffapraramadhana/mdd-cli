@@ -255,4 +255,15 @@ describe('App', () => {
     expect(lastFrame()).toMatch(/1\.2s/);
     vi.restoreAllMocks();
   });
+
+  it('shows elapsed turn time and the interrupt hint while busy', () => {
+    const store = new UiStore(() => 0); // turnStartedAt = 0 on busy
+    store.setMeta({ provider: 'anthropic', model: 'm', cwd: '~/x', autoApprove: false });
+    store.setStatus('busy'); // thinking (no streaming, no active tool)
+    vi.spyOn(Date, 'now').mockReturnValue(4300);
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame()).toMatch(/4\.3s/);
+    expect(lastFrame()).toContain('esc to interrupt');
+    vi.restoreAllMocks();
+  });
 });
