@@ -198,20 +198,25 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
             block and not an inverted first letter ("A"). Only when idle + empty. */}
         {state.status === 'idle' && state.pendingPrompt === null && value === '' ? <Text dimColor>Ask anything…</Text> : null}
       </Box>
+      <Text dimColor>{'─'.repeat(width)}</Text>
     </Box>
   );
 
   const statusBar = meta ? (
     <Box flexDirection="column">
-      <Text>
-        <Text color={theme.accent} bold>mdd</Text>
-        <Text>{'  '}</Text>
-        <Text dimColor>{formatStatus(meta)}</Text>
-        {state.usage.inputTokens + state.usage.outputTokens > 0
-          ? <Text dimColor>{`  · ${formatUsage(state.usage, meta.model)}`}</Text>
-          : null}
-      </Text>
-      <Text dimColor>{`${HINTS}    ${formatPath(meta)} · ctrl-c exit`}</Text>
+      {/* Metadata on the left, cwd + exit hint pushed to the right edge. */}
+      <Box width={width} paddingX={1} justifyContent="space-between">
+        <Text>
+          <Text color={theme.accent} bold>mdd</Text>
+          <Text dimColor>{`  ${formatStatus(meta)}`}</Text>
+          {state.usage.inputTokens + state.usage.outputTokens > 0
+            ? <Text dimColor>{`  · ${formatUsage(state.usage, meta.model)}`}</Text>
+            : null}
+        </Text>
+        <Text dimColor>{`${formatPath(meta)} · ctrl-c exit`}</Text>
+      </Box>
+      {/* Command hints on their own dim line, indented to align with the input. */}
+      <Box paddingX={1}><Text dimColor>{HINTS}</Text></Box>
     </Box>
   ) : null;
 
