@@ -27,4 +27,28 @@ describe('App', () => {
     const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
     expect(lastFrame()).toContain('Allow write_file?');
   });
+
+  it('labels user input with "You" and assistant turns with "MDD"', () => {
+    const store = new UiStore();
+    store.addUser('hi there');
+    store.appendStreaming('hello back');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('You');
+    expect(frame).toContain('hi there');
+    expect(frame).toContain('MDD');
+    expect(frame).toContain('hello back');
+  });
+
+  it('renders the status footer when meta is provided', () => {
+    const store = new UiStore();
+    const { lastFrame } = render(
+      <App store={store} onSubmit={() => {}} meta={{ provider: 'openai', model: 'cc/claude-opus-4-8', cwd: '~/proj', autoApprove: true }} />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('openai');
+    expect(frame).toContain('cc/claude-opus-4-8');
+    expect(frame).toContain('~/proj');
+    expect(frame).toContain('auto-approve');
+  });
 });
