@@ -52,7 +52,7 @@ function ToolLine({ marker, color, text, ms, elapsed, preview, rail }: { marker:
   );
 }
 
-function renderItem(item: TranscriptItem, key: number, userNum: number, theme: Theme) {
+function renderItem(item: TranscriptItem, key: number, userNum: number, theme: Theme, cont: boolean) {
   if (item.kind === 'user') {
     return (
       <Box key={key} flexDirection="column" marginTop={1}>
@@ -66,7 +66,9 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
     );
   }
   if (item.kind === 'assistant') {
-    return <Row key={key} label="MDD" color={theme.assistant}><Markdown text={item.text} theme={theme} /></Row>;
+    // `cont` = this chunk was flushed from the same reply as the item above it (see
+    // splitStreamable): blank the gutter so one reply reads as one message, not many "MDD"s.
+    return <Row key={key} label={cont ? '' : 'MDD'} color={theme.assistant}><Markdown text={item.text} theme={theme} /></Row>;
   }
   if (item.kind === 'system') {
     return (
@@ -153,8 +155,13 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
   let userNum = 0;
   const allEls = state.transcript.map((item, i) => {
     if (item.kind === 'user') userNum += 1;
-    return renderItem(item, i, userNum, theme);
+    // An assistant item directly after another is a flushed continuation of the same reply.
+    const cont = item.kind === 'assistant' && state.transcript[i - 1]?.kind === 'assistant';
+    return renderItem(item, i, userNum, theme, cont);
   });
+  // The live streaming tail continues the reply if we've already flushed a chunk of it (the last
+  // committed item is assistant) — so it too drops the repeated "MDD" gutter.
+  const streamCont = state.transcript.at(-1)?.kind === 'assistant';
   const staticItems = showHeader
     ? [<Header key="hdr" theme={theme} version={VERSION} width={width} />, ...allEls]
     : allEls;
@@ -170,7 +177,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
         </Row>
       ) : null}
       {state.streaming ? (
-        <Row label="MDD" color={theme.assistant}>
+        <Row label={streamCont ? '' : 'MDD'} color={theme.assistant}>
           <Box flexDirection="column">
             <Markdown text={state.streaming} theme={theme} />
             <Text color={theme.assistant}>{cursorFrame(tick)}</Text>
@@ -244,23 +251,41 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
     </Box>
   );
 
-  const statusBar = meta ? (
-    <Box flexDirection="column">
-      {/* Metadata on the left, cwd + exit hint pushed to the right edge. */}
-      <Box width={width} paddingX={1} justifyContent="space-between">
-        <Text>
-          <Text color={theme.accent} bold>mdd</Text>
-          <Text dimColor>{`  ${formatStatus(meta)}`}</Text>
-          {state.usage.inputTokens + state.usage.outputTokens > 0
-            ? <Text dimColor>{`  · ${formatUsage(state.usage, meta.model)}`}</Text>
-            : null}
-        </Text>
-        <Text dimColor>{`${formatPath(meta)} · ctrl-c exit`}</Text>
+  let statusBar: ReactNode = null;
+  if (meta) {
+    const usageText = state.usage.inputTokens + state.usage.outputTokens > 0
+      ? `  · ${formatUsage(state.usage, meta.model)}`
+      : '';
+    const pathText = `${formatPath(meta)} · ctrl-c exit`;
+    // Measure the two halves against the terminal: 'mdd' (3) + '  ' (2) + status + usage on the
+    // left, the path line on the right, plus a 1-col min gap and paddingX (2). When they don't
+    // both fit on one line, stack them instead of letting space-between collide them (as it did
+    // at narrow widths — `claude-opus-4-8~/Desktop…`).
+    const oneLine = 3 + 2 + formatStatus(meta).length + usageText.length + 1 + pathText.length + 2 <= width;
+    const metaLine = (
+      <Text>
+        <Text color={theme.accent} bold>mdd</Text>
+        <Text dimColor>{`  ${formatStatus(meta)}`}</Text>
+        {usageText ? <Text dimColor>{usageText}</Text> : null}
+      </Text>
+    );
+    const pathLine = <Text dimColor wrap="wrap">{pathText}</Text>;
+    statusBar = (
+      <Box flexDirection="column">
+        {oneLine ? (
+          // Metadata on the left, cwd + exit hint pushed to the right edge.
+          <Box width={width} paddingX={1} justifyContent="space-between">{metaLine}{pathLine}</Box>
+        ) : (
+          <>
+            <Box paddingX={1}>{metaLine}</Box>
+            <Box paddingX={1}>{pathLine}</Box>
+          </>
+        )}
+        {/* Command hints on their own dim line, indented to align with the input. */}
+        <Box paddingX={1}><Text dimColor>{HINTS}</Text></Box>
       </Box>
-      {/* Command hints on their own dim line, indented to align with the input. */}
-      <Box paddingX={1}><Text dimColor>{HINTS}</Text></Box>
-    </Box>
-  ) : null;
+    );
+  }
 
   return (
     <Box flexDirection="column">

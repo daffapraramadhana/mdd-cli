@@ -1,5 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import { UiStore } from '../../src/ui/store.js';
+import { UiStore, splitStreamable } from '../../src/ui/store.js';
+
+describe('splitStreamable', () => {
+  it('keeps the whole buffer live when there is no blank-line boundary yet', () => {
+    expect(splitStreamable('a single growing line')).toEqual({ committed: '', rest: 'a single growing line' });
+    expect(splitStreamable('line one\nline two')).toEqual({ committed: '', rest: 'line one\nline two' });
+  });
+
+  it('flushes complete paragraphs and keeps the trailing incomplete one live', () => {
+    expect(splitStreamable('para one\n\npara two still typ')).toEqual({
+      committed: 'para one',
+      rest: 'para two still typ',
+    });
+  });
+
+  it('flushes everything up to the LAST safe boundary', () => {
+    expect(splitStreamable('a\n\nb\n\nc tail')).toEqual({ committed: 'a\n\nb', rest: 'c tail' });
+  });
+
+  it('never cuts inside an open ``` code fence', () => {
+    // a blank line inside the fence is NOT a safe boundary
+    expect(splitStreamable('```js\ncode\n\nmore code')).toEqual({
+      committed: '',
+      rest: '```js\ncode\n\nmore code',
+    });
+  });
+
+  it('flushes a closed fence as one whole block', () => {
+    expect(splitStreamable('```js\ncode\n```\n\ntail')).toEqual({
+      committed: '```js\ncode\n```',
+      rest: 'tail',
+    });
+  });
+});
 
 describe('UiStore', () => {
   it('appends streaming text and commits it into the transcript', () => {
@@ -10,6 +43,32 @@ describe('UiStore', () => {
     s.commitStreaming();
     expect(s.getState().streaming).toBe('');
     expect(s.getState().transcript).toEqual([{ kind: 'assistant', text: 'hello' }]);
+  });
+
+  it('flushes a completed paragraph into scrollback mid-stream, keeping the tail live', () => {
+    const s = new UiStore();
+    s.appendStreaming('First paragraph.');
+    // still one growing block — nothing committed yet
+    expect(s.getState().transcript).toEqual([]);
+    expect(s.getState().streaming).toBe('First paragraph.');
+    s.appendStreaming('\n\nSecond para');
+    // the completed first paragraph is now in scrollback; only the tail stays live
+    expect(s.getState().transcript).toEqual([{ kind: 'assistant', text: 'First paragraph.' }]);
+    expect(s.getState().streaming).toBe('Second para');
+    // …and committing the turn appends the remaining tail as its own chunk
+    s.commitStreaming();
+    expect(s.getState().transcript).toEqual([
+      { kind: 'assistant', text: 'First paragraph.' },
+      { kind: 'assistant', text: 'Second para' },
+    ]);
+    expect(s.getState().streaming).toBe('');
+  });
+
+  it('does not flush an unclosed code fence (keeps it whole in the live frame)', () => {
+    const s = new UiStore();
+    s.appendStreaming('```js\nconst x = 1;\n\nconst y = 2;');
+    expect(s.getState().transcript).toEqual([]);
+    expect(s.getState().streaming).toBe('```js\nconst x = 1;\n\nconst y = 2;');
   });
 
   it('commits streaming on startTool, then records the tool with status + timing on endTool', () => {

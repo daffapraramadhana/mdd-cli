@@ -1,6 +1,23 @@
 import { summarizePreview } from './format.js';
 import type { SessionMeta } from './banner.js';
 
+// Split a live streaming markdown buffer into a prefix that is safe to flush into scrollback
+// (`committed`) and a trailing remainder that must stay in the live frame (`rest`). The cut is
+// the LAST blank line that is NOT inside an open ``` fenced code block — so we never commit a
+// half-rendered block (an open fence, a list still growing). `committed` is '' when no safe
+// boundary exists yet, i.e. the whole buffer stays live.
+export function splitStreamable(buf: string): { committed: string; rest: string } {
+  const lines = buf.split('\n');
+  let inFence = false;
+  let cut = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*```/.test(lines[i])) { inFence = !inFence; continue; }
+    if (!inFence && lines[i].trim() === '' && i > 0) cut = i;
+  }
+  if (cut < 0) return { committed: '', rest: buf };
+  return { committed: lines.slice(0, cut).join('\n'), rest: lines.slice(cut + 1).join('\n') };
+}
+
 export type TranscriptItem =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
@@ -57,7 +74,19 @@ export class UiStore {
 
   appendStreaming = (delta: string): void => {
     this.collapseReasoning(); // first answer delta ends the reasoning block
-    this.set({ streaming: this.state.streaming + delta });
+    // Flush any completed markdown blocks into scrollback so the live frame stays short — this is
+    // what keeps the input pinned near the bottom during long turns (see App). Only the trailing
+    // incomplete block re-renders in place; finished paragraphs/fences become <Static> history.
+    const buf = this.state.streaming + delta;
+    const { committed, rest } = splitStreamable(buf);
+    if (committed.trim()) {
+      this.set({
+        transcript: [...this.state.transcript, { kind: 'assistant', text: committed.trimEnd() }],
+        streaming: rest,
+      });
+    } else {
+      this.set({ streaming: buf });
+    }
   };
 
   appendReasoning = (delta: string): void => {

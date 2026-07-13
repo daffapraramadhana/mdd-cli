@@ -93,6 +93,21 @@ describe('App', () => {
     expect(frame).toContain('hello back');
   });
 
+  it('shows the "MDD" gutter once across flushed continuation chunks of one reply', () => {
+    const store = new UiStore();
+    // A reply that streams as several completed paragraphs gets flushed into multiple
+    // assistant transcript items; the gutter label must appear only on the first.
+    store.loadTranscript([
+      { kind: 'assistant', text: 'First paragraph.' },
+      { kind: 'assistant', text: 'Second paragraph.' },
+    ]);
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('First paragraph.');
+    expect(frame).toContain('Second paragraph.');
+    expect((frame.match(/MDD/g) ?? []).length).toBe(1); // label not repeated on the continuation
+  });
+
   it('renders the status + path footer from the store meta', () => {
     const store = new UiStore();
     store.setMeta({ provider: 'openai', model: 'cc/claude-opus-4-8', cwd: '~/proj', branch: 'main', autoApprove: true });
