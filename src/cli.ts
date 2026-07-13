@@ -11,7 +11,7 @@ import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { UiStore, mountApp, mountFullscreen, shortenCwd, type SessionMeta } from './ui/index.js';
+import { UiStore, mountApp, shortenCwd, type SessionMeta } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
 import { THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
 import { formatModels, KNOWN_MODELS } from './models.js';
@@ -258,8 +258,8 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  // Fullscreen alternate-screen TUI (Header box at top, transcript viewport, input pinned).
-  app = mountFullscreen(store, (line) => { void onSubmit(line); });
+  // Inline REPL with a welcome header — conversation stays in scrollback and persists on exit.
+  app = mountApp(store, (line) => { void onSubmit(line); }, true);
   await app.waitUntilExit();
 }
 
