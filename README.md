@@ -1,8 +1,20 @@
 # mdd
 
+[![npm version](https://img.shields.io/npm/v/mdd-cli.svg)](https://www.npmjs.com/package/mdd-cli)
+[![node](https://img.shields.io/node/v/mdd-cli.svg)](https://nodejs.org)
+
 MDD's terminal coding assistant. Chat with an AI agent that reads and edits files,
 runs shell/git, and streams its work in a polished terminal UI — multi-provider
 (Anthropic + OpenAI-compatible, including 9router), with confirmation before any change.
+
+**Features**
+
+- 🤖 Agentic loop — reads/edits files and runs shell & git to complete tasks
+- 🔌 Multi-provider — Anthropic, OpenAI, or any OpenAI-compatible endpoint (9router)
+- 🖥️ Fullscreen TUI — gradient header, live tool status & timing, markdown replies, themes
+- 🔒 Safe by default — every file/shell/git change asks for confirmation first
+- ⚡ Switch on the fly — `/model`, `/provider`, `/theme` without restarting
+- 📜 History persists — your conversation prints back to the terminal on exit
 
 ---
 
