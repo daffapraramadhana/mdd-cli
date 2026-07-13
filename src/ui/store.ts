@@ -3,10 +3,10 @@ import type { SessionMeta } from './banner.js';
 export type TranscriptItem =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
-  | { kind: 'tool'; name: string; input: unknown; status: 'ok' | 'error' }
+  | { kind: 'tool'; name: string; input: unknown; status: 'ok' | 'error'; durationMs: number }
   | { kind: 'system'; text: string };
 
-export interface ActiveTool { name: string; input: unknown; }
+export interface ActiveTool { name: string; input: unknown; startedAt: number; }
 
 export interface UiState {
   transcript: TranscriptItem[];
@@ -15,14 +15,18 @@ export interface UiState {
   pendingPrompt: string | null;
   meta: SessionMeta | null;
   activeTool: ActiveTool | null;
+  themeName: string;
 }
 
 export class UiStore {
   private state: UiState = {
     transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
+    themeName: 'neon',
   };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
+
+  constructor(private now: () => number = Date.now) {}
 
   getState = (): UiState => this.state;
 
@@ -55,18 +59,21 @@ export class UiStore {
   // A tool begins: commit any streamed text, then show it as the live "running" item.
   startTool = (name: string, input: unknown): void => {
     this.commitStreaming();
-    this.set({ activeTool: { name, input } });
+    this.set({ activeTool: { name, input, startedAt: this.now() } });
   };
 
-  // A tool finishes: move the active tool into the transcript with its outcome.
+  // A tool finishes: move the active tool into the transcript with its outcome + elapsed time.
   endTool = (status: 'ok' | 'error'): void => {
     const active = this.state.activeTool;
     if (!active) return;
+    const durationMs = Math.max(0, this.now() - active.startedAt);
     this.set({
-      transcript: [...this.state.transcript, { kind: 'tool', name: active.name, input: active.input, status }],
+      transcript: [...this.state.transcript, { kind: 'tool', name: active.name, input: active.input, status, durationMs }],
       activeTool: null,
     });
   };
+
+  setTheme = (themeName: string): void => { this.set({ themeName }); };
 
   addSystem = (text: string): void => {
     this.set({ transcript: [...this.state.transcript, { kind: 'system', text }] });

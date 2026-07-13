@@ -33,14 +33,15 @@ describe('App', () => {
     expect(frame).toContain('✗');
   });
 
-  it('renders a running tool live with a ⋯', () => {
+  it('renders a running tool live with an animated spinner frame + icon', () => {
     const store = new UiStore();
     store.setStatus('busy');
     store.startTool('read_file', { path: 'package.json' });
     const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
     const frame = lastFrame() ?? '';
     expect(frame).toContain('read_file(package.json)');
-    expect(frame).toContain('⋯');
+    expect(frame).toContain('▤'); // tool icon
+    expect(frame).toContain('⠋'); // first spinner frame (tick 0)
   });
 
   it('renders markdown in a committed assistant reply (bold, inline code, code block)', () => {

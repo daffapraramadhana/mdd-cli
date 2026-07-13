@@ -13,6 +13,7 @@ import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { UiStore, mountApp, formatBanner, shortenCwd, type SessionMeta } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
+import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
 import { formatModels } from './models.js';
 import type { Message } from './types.js';
 
@@ -42,7 +43,7 @@ async function resolveSetup(opts: RunOpts) {
   // Precedence for the OpenAI base URL: --base-url flag > config (file or OPENAI_BASE_URL env) > SDK default.
   const effectiveConfig = opts.baseUrl ? { ...config, openaiBaseUrl: opts.baseUrl } : config;
   const provider = getProvider(providerName, effectiveConfig);
-  return { provider, model };
+  return { provider, model, config };
 }
 
 async function authLogin(): Promise<void> {
@@ -86,9 +87,10 @@ function streamHandlers(store: UiStore) {
 }
 
 async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
-  const { provider, model } = await resolveSetup(opts);
+  const { provider, model, config } = await resolveSetup(opts);
   const cwd = process.cwd();
   const store = new UiStore();
+  store.setTheme(config.theme ?? DEFAULT_THEME);
   store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, gitBranch(cwd)));
   const gate = createGate({ prompt: store.requestPrompt, autoApprove: opts.yes });
   const app = mountApp(store, () => {});
@@ -118,6 +120,7 @@ export const HELP = [
   '  /model [id]        show or switch the model (takes effect next turn)',
   '  /models            list common model ids',
   '  /provider <name>   switch provider: anthropic | openai',
+  `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
   '  /exit              quit (or press Ctrl-C)',
 ].join('\n');
@@ -127,6 +130,7 @@ export interface ReplSession {
   providerName: 'anthropic' | 'openai';
   model: string;
   provider: LLMProvider;
+  theme: string;
 }
 
 export interface CommandDeps {
@@ -134,6 +138,7 @@ export interface CommandDeps {
   effectiveConfig: Config;
   store: Pick<UiStore, 'addSystem' | 'setMeta'>;
   refreshMeta: () => void;
+  applyTheme: (name: string) => void;
   exit: () => void;
 }
 
@@ -170,6 +175,13 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
       }
       break;
     }
+    case 'theme':
+      if (!arg) { deps.store.addSystem(`current theme: ${session.theme}; available: ${THEME_NAMES.join(', ')}`); break; }
+      if (!THEME_NAMES.includes(arg)) { deps.store.addSystem(`unknown theme: ${arg} (try: ${THEME_NAMES.join(', ')})`); break; }
+      session.theme = arg;
+      deps.applyTheme(arg);
+      deps.store.addSystem(`→ theme set to ${arg}`);
+      break;
     case 'exit':
     case 'quit':
       deps.exit();
@@ -192,10 +204,13 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const providerName = opts.provider ?? config.defaultProvider;
   const effectiveConfig = opts.baseUrl ? { ...config, openaiBaseUrl: opts.baseUrl } : config;
+  const themeName = config.theme ?? DEFAULT_THEME;
+  store.setTheme(themeName);
   const session: ReplSession = {
     providerName,
     model: resolveModel(providerName, config, opts.model),
     provider: getProvider(providerName, effectiveConfig),
+    theme: themeName,
   };
 
   const refreshMeta = (): void => {
@@ -203,10 +218,12 @@ async function repl(opts: RunOpts): Promise<void> {
   };
   refreshMeta();
 
+  const applyTheme = (name: string): void => { store.setTheme(name); void saveConfig({ theme: name }); };
+
   const onSubmit = async (line: string): Promise<void> => {
     if (running) return;
     if (line.startsWith('/')) {
-      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, exit: () => process.exit(0) });
+      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, exit: () => process.exit(0) });
       return;
     }
     running = true;
@@ -231,8 +248,9 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const bannerLines = formatBanner({ version: VERSION }).split('\n');
   const subtitle = bannerLines.pop() ?? '';
-  // Logo in bold magenta, subtitle dim, then a blank line.
-  process.stdout.write(`\x1b[1m\x1b[35m${bannerLines.join('\n')}\x1b[0m\n\x1b[2m${subtitle}\x1b[0m\n\n`);
+  // Logo in a vertical theme gradient, subtitle dim, then a blank line.
+  const logo = gradientText(bannerLines.join('\n'), getTheme(themeName).gradient);
+  process.stdout.write(`${logo}\n\x1b[2m${subtitle}\x1b[0m\n\n`);
   const app = mountApp(store, (line) => { void onSubmit(line); });
   await app.waitUntilExit();
 }

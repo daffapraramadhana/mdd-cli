@@ -1,14 +1,16 @@
 import type { ReactNode } from 'react';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Box, Text, Static } from 'ink';
 import TextInput from 'ink-text-input';
 import type { UiStore, TranscriptItem } from './store.js';
 import { formatStatus, formatPath } from './banner.js';
-import { formatToolCall } from './format.js';
+import { formatToolCall, toolIcon } from './format.js';
 import { Markdown } from './markdown.js';
+import { getTheme, type Theme } from './theme.js';
+import { spinnerFrame, thinkingDots, cursorFrame } from './spinner.js';
 
 const GUTTER = 5;
-const HINTS = '/model  /models  /provider  /help';
+const HINTS = '/model  /theme  /help';
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {
   return (
@@ -21,21 +23,31 @@ function Row({ label, color, children }: { label: string; color?: string; childr
   );
 }
 
-function ToolLine({ marker, color, text }: { marker: string; color?: string; text: string }) {
+function ToolLine({ marker, color, text, ms }: { marker: string; color?: string; text: string; ms?: number }) {
   return (
     <Box>
       <Box width={GUTTER} flexShrink={0}><Text> </Text></Box>
       <Text color={color}>{`${marker} ${text}`}</Text>
+      {ms !== undefined ? <Text dimColor>{`  ${ms}ms`}</Text> : null}
     </Box>
   );
 }
 
-function renderItem(item: TranscriptItem, key: number) {
+function renderItem(item: TranscriptItem, key: number, userNum: number, theme: Theme) {
   if (item.kind === 'user') {
-    return <Row key={key} label="You" color="cyan"><Text>{item.text}</Text></Row>;
+    return (
+      <Box key={key} flexDirection="column" marginTop={1}>
+        {userNum > 1 ? <Text dimColor>{'─'.repeat(48)}</Text> : null}
+        <Box>
+          <Box width={GUTTER} flexShrink={0}><Text color={theme.user} bold>You</Text></Box>
+          <Text>{item.text}</Text>
+          <Text dimColor>{`  #${userNum}`}</Text>
+        </Box>
+      </Box>
+    );
   }
   if (item.kind === 'assistant') {
-    return <Row key={key} label="MDD" color="magenta"><Markdown text={item.text} /></Row>;
+    return <Row key={key} label="MDD" color={theme.assistant}><Markdown text={item.text} codeColor={theme.code} accent={theme.accent} /></Row>;
   }
   if (item.kind === 'system') {
     return (
@@ -50,8 +62,9 @@ function renderItem(item: TranscriptItem, key: number) {
     <ToolLine
       key={key}
       marker={ok ? '✓' : '✗'}
-      color={ok ? 'green' : 'red'}
-      text={formatToolCall(item.name, item.input)}
+      color={ok ? theme.toolOk : theme.toolError}
+      text={`${toolIcon(item.name)} ${formatToolCall(item.name, item.input)}`}
+      ms={item.durationMs}
     />
   );
 }
@@ -59,6 +72,18 @@ function renderItem(item: TranscriptItem, key: number) {
 export function App({ store, onSubmit }: { store: UiStore; onSubmit: (line: string) => void }) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
+  const [tick, setTick] = useState(0);
+
+  const theme = getTheme(state.themeName);
+  const animating = state.activeTool !== null || state.status === 'busy' || state.streaming !== '';
+
+  // A single interval drives all animation, and only runs while something animates.
+  useEffect(() => {
+    if (!animating) return;
+    const t = setInterval(() => setTick((n) => n + 1), 90);
+    (t as { unref?: () => void }).unref?.();
+    return () => clearInterval(t);
+  }, [animating]);
 
   const handleSubmit = (v: string) => {
     setValue('');
@@ -67,47 +92,47 @@ export function App({ store, onSubmit }: { store: UiStore; onSubmit: (line: stri
   };
 
   const inputActive = state.pendingPrompt !== null || state.status === 'idle';
-  const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming;
+  const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool;
   const meta = state.meta;
+
+  // Precompute elements with per-user ordinal (for #counter + dividers).
+  let userNum = 0;
+  const elements = state.transcript.map((item, i) => {
+    if (item.kind === 'user') userNum += 1;
+    return renderItem(item, i, userNum, theme);
+  });
 
   return (
     <Box flexDirection="column">
-      <Static items={state.transcript}>{(item, i) => renderItem(item, i)}</Static>
+      <Static items={elements}>{(el) => el}</Static>
 
       {state.streaming ? (
-        <Row label="MDD" color="magenta"><Text>{state.streaming}</Text></Row>
+        <Row label="MDD" color={theme.assistant}>
+          <Text>{state.streaming}<Text color={theme.assistant}>{cursorFrame(tick)}</Text></Text>
+        </Row>
       ) : null}
       {state.activeTool ? (
-        <ToolLine marker="⋯" color="gray" text={formatToolCall(state.activeTool.name, state.activeTool.input)} />
+        <ToolLine
+          marker={spinnerFrame(tick)}
+          color={theme.toolRun}
+          text={`${toolIcon(state.activeTool.name)} ${formatToolCall(state.activeTool.name, state.activeTool.input)}`}
+        />
       ) : null}
-      {thinking && !state.activeTool ? (
-        <Row label="MDD" color="magenta"><Text dimColor>…thinking</Text></Row>
+      {thinking ? (
+        <Row label="MDD" color={theme.assistant}><Text dimColor>{`thinking${thinkingDots(tick)}`}</Text></Row>
       ) : null}
 
       {inputActive ? (
-        <Box
-          marginTop={1}
-          borderStyle="round"
-          borderColor="magenta"
-          borderTop={false}
-          borderRight={false}
-          borderBottom={false}
-          paddingLeft={1}
-        >
+        <Box marginTop={1} borderStyle="round" borderColor={theme.accent} borderTop={false} borderRight={false} borderBottom={false} paddingLeft={1}>
           {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
-          <TextInput
-            value={value}
-            onChange={setValue}
-            onSubmit={handleSubmit}
-            placeholder={state.pendingPrompt !== null ? undefined : 'Ask anything…'}
-          />
+          <TextInput value={value} onChange={setValue} onSubmit={handleSubmit} placeholder={state.pendingPrompt !== null ? undefined : 'Ask anything…'} />
         </Box>
       ) : null}
 
       {meta ? (
         <Box flexDirection="column" marginTop={inputActive ? 0 : 1}>
           <Text>
-            <Text color="magenta" bold>mdd</Text>
+            <Text color={theme.accent} bold>mdd</Text>
             <Text>{'  '}</Text>
             <Text dimColor>{formatStatus(meta)}</Text>
           </Text>

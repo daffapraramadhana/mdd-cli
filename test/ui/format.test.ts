@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatToolCall } from '../../src/ui/format.js';
+import { formatToolCall, toolIcon } from '../../src/ui/format.js';
 import { splitBlocks, parseInline } from '../../src/ui/markdown.js';
 
 describe('formatToolCall', () => {
@@ -18,6 +18,15 @@ describe('formatToolCall', () => {
   });
   it('falls back to JSON for unknown tools', () => {
     expect(formatToolCall('weird', { a: 1 })).toBe('weird({"a":1})');
+  });
+});
+
+describe('toolIcon', () => {
+  it('maps known tools to glyphs and falls back to a dot', () => {
+    expect(toolIcon('read_file')).toBe('▤');
+    expect(toolIcon('run_shell')).toBe('❯');
+    expect(toolIcon('git')).toBe('⎇');
+    expect(toolIcon('mystery')).toBe('•');
   });
 });
 
