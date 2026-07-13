@@ -11,14 +11,49 @@ describe('App', () => {
     expect(lastFrame()).toContain('hello world');
   });
 
-  it('renders a committed user line and a tool line from the transcript', () => {
+  it('renders a completed tool line with a ✓ and prettified args', () => {
     const store = new UiStore();
     store.addUser('list files');
-    store.addTool('list_dir', { path: '.' });
+    store.startTool('list_dir', { path: '.' });
+    store.endTool('ok');
     const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
     const frame = lastFrame() ?? '';
     expect(frame).toContain('list files');
-    expect(frame).toContain('list_dir');
+    expect(frame).toContain('list_dir(.)');
+    expect(frame).toContain('✓');
+  });
+
+  it('renders a failed tool line with a ✗', () => {
+    const store = new UiStore();
+    store.startTool('run_shell', { command: 'false' });
+    store.endTool('error');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('run_shell(false)');
+    expect(frame).toContain('✗');
+  });
+
+  it('renders a running tool live with a ⋯', () => {
+    const store = new UiStore();
+    store.setStatus('busy');
+    store.startTool('read_file', { path: 'package.json' });
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('read_file(package.json)');
+    expect(frame).toContain('⋯');
+  });
+
+  it('renders markdown in a committed assistant reply (bold, inline code, code block)', () => {
+    const store = new UiStore();
+    store.appendStreaming('Use **npm test**. Run `vitest`.\n```\nnpm test\n```');
+    store.commitStreaming();
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    // Markers are stripped; content remains
+    expect(frame).toContain('npm test');
+    expect(frame).toContain('vitest');
+    expect(frame).not.toContain('**');
+    expect(frame).not.toContain('```');
   });
 
   it('shows the permission message when a prompt is pending', () => {

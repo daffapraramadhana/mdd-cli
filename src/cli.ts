@@ -12,6 +12,7 @@ import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { UiStore, mountApp, formatBanner, shortenCwd, type SessionMeta } from './ui/index.js';
+import { ThinkSplitter } from './ui/think.js';
 import { formatModels } from './models.js';
 import type { Message } from './types.js';
 
@@ -73,6 +74,17 @@ function sessionMeta(providerName: string, model: string, cwd: string, autoAppro
   return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove, branch };
 }
 
+/** Per-turn streaming callbacks: strips <think> from text, tracks tool start/end, flush at end. */
+function streamHandlers(store: UiStore) {
+  const splitter = new ThinkSplitter();
+  return {
+    onText: (delta: string): void => { const v = splitter.push(delta); if (v) store.appendStreaming(v); },
+    onToolStart: (name: string, input: unknown): void => store.startTool(name, input),
+    onToolEnd: (isError: boolean): void => store.endTool(isError ? 'error' : 'ok'),
+    flush: (): void => { const rest = splitter.flush(); if (rest) store.appendStreaming(rest); },
+  };
+}
+
 async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const { provider, model } = await resolveSetup(opts);
   const cwd = process.cwd();
@@ -83,11 +95,14 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   store.addUser(prompt);
   store.setStatus('busy');
   const messages: Message[] = [{ role: 'user', content: [{ type: 'text', text: prompt }] }];
+  const h = streamHandlers(store);
   try {
     await runTurn(messages, {
       provider, registry: buildRegistry(), gate, cwd, model,
-      systemPrompt: buildSystemPrompt(cwd), onText: store.appendStreaming, onToolStart: store.addTool,
+      systemPrompt: buildSystemPrompt(cwd),
+      onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd,
     });
+    h.flush();
   } catch (err) {
     store.appendStreaming(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
   } finally {
@@ -198,11 +213,13 @@ async function repl(opts: RunOpts): Promise<void> {
     store.addUser(line);
     store.setStatus('busy');
     messages.push({ role: 'user', content: [{ type: 'text', text: line }] });
+    const h = streamHandlers(store);
     try {
       await runTurn(messages, {
         provider: session.provider, registry, gate, cwd, model: session.model, systemPrompt,
-        onText: store.appendStreaming, onToolStart: store.addTool,
+        onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd,
       });
+      h.flush();
     } catch (err) {
       store.appendStreaming(`\nError: ${err instanceof Error ? err.message : String(err)}\n`);
     } finally {

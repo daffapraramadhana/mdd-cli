@@ -14,6 +14,7 @@ export interface AgentDeps {
   systemPrompt: string;
   onText?: (t: string) => void;
   onToolStart?: (name: string, input: unknown) => void;
+  onToolEnd?: (isError: boolean) => void;
   signal?: AbortSignal;
 }
 
@@ -42,14 +43,24 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
     for (const use of toolUses) {
       deps.onToolStart?.(use.name, use.input);
       const tool = deps.registry.get(use.name);
-      if (!tool) { results.push({ type: 'tool_result', toolUseId: use.id, content: `Unknown tool: ${use.name}`, isError: true }); continue; }
+      if (!tool) {
+        results.push({ type: 'tool_result', toolUseId: use.id, content: `Unknown tool: ${use.name}`, isError: true });
+        deps.onToolEnd?.(true);
+        continue;
+      }
       const decision = await deps.gate.check(tool, use.input);
-      if (decision === 'deny') { results.push({ type: 'tool_result', toolUseId: use.id, content: 'User denied this tool call.', isError: true }); continue; }
+      if (decision === 'deny') {
+        results.push({ type: 'tool_result', toolUseId: use.id, content: 'User denied this tool call.', isError: true });
+        deps.onToolEnd?.(true);
+        continue;
+      }
       try {
         const r = await tool.handler(use.input, { cwd: deps.cwd });
         results.push({ type: 'tool_result', toolUseId: use.id, content: r.content, isError: r.isError });
+        deps.onToolEnd?.(r.isError);
       } catch (err) {
         results.push({ type: 'tool_result', toolUseId: use.id, content: err instanceof Error ? err.message : String(err), isError: true });
+        deps.onToolEnd?.(true);
       }
     }
     messages.push({ role: 'user', content: results });
