@@ -15,9 +15,13 @@ export interface Config {
 
 const DEFAULTS: Config = { defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-8' };
 
+/** The directory mdd stores its config (and sessions) in: ~/.config/mdd, or $MDD_CONFIG_DIR. */
+export function configDir(): string {
+  return process.env.MDD_CONFIG_DIR ?? join(homedir(), '.config', 'mdd');
+}
+
 export function configPath(): string {
-  const base = process.env.MDD_CONFIG_DIR ?? join(homedir(), '.config', 'mdd');
-  return join(base, 'config.json');
+  return join(configDir(), 'config.json');
 }
 
 async function readFileConfig(): Promise<Partial<Config>> {

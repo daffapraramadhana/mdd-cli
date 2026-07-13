@@ -12,6 +12,7 @@ function setup(config: Partial<Config> = {}, initial: Partial<ReplSession> = {})
   let exited = false;
   let appliedTheme: string | null = null;
   let pickedModel = 0;
+  let resumedSession = 0;
   const session: ReplSession = {
     providerName: 'anthropic',
     model: 'claude-opus-4-8',
@@ -27,13 +28,14 @@ function setup(config: Partial<Config> = {}, initial: Partial<ReplSession> = {})
     refreshMeta: () => { refreshed++; },
     applyTheme: (name) => { appliedTheme = name; },
     pickModel: () => { pickedModel++; },
+    resumeSession: () => { resumedSession++; },
     exit: () => { exited = true; },
   };
   const lastSystem = () => {
     const items = store.getState().transcript.filter((t) => t.kind === 'system') as { text: string }[];
     return items.at(-1)?.text ?? '';
   };
-  return { store, session, deps, lastSystem, refreshedCount: () => refreshed, exited: () => exited, appliedTheme: () => appliedTheme, pickedModel: () => pickedModel };
+  return { store, session, deps, lastSystem, refreshedCount: () => refreshed, exited: () => exited, appliedTheme: () => appliedTheme, pickedModel: () => pickedModel, resumedSession: () => resumedSession };
 }
 
 describe('handleReplCommand', () => {
@@ -98,6 +100,12 @@ describe('handleReplCommand', () => {
     handleReplCommand('/theme rainbow', t.session, t.deps);
     expect(t.appliedTheme()).toBeNull();
     expect(t.lastSystem()).toContain('unknown theme: rainbow');
+  });
+
+  it('/resume invokes the resumeSession hook', () => {
+    const t = setup();
+    handleReplCommand('/resume', t.session, t.deps);
+    expect(t.resumedSession()).toBe(1);
   });
 
   it('/exit calls the exit hook', () => {
