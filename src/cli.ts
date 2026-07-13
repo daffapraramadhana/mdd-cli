@@ -17,14 +17,13 @@ import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.j
 import { LOGO } from './ui/banner.js';
 import { onboardChoice, buildOnboardPatch, type OnboardChoice } from './onboard.js';
 import { formatModels, KNOWN_MODELS } from './models.js';
+import { VERSION } from './version.js';
 import type { Message } from './types.js';
 
 // Small ANSI helpers for the pre-TUI onboarding output.
 const A = (s: string): string => `\x1b[1m\x1b[35m${s}\x1b[0m`; // bold magenta accent
 const D = (s: string): string => `\x1b[2m${s}\x1b[0m`;         // dim
 const G = (s: string): string => `\x1b[32m${s}\x1b[0m`;        // green
-
-const VERSION = '0.1.0';
 
 interface RunOpts { provider?: 'anthropic' | 'openai'; model?: string; yes?: boolean; baseUrl?: string; }
 
@@ -67,7 +66,7 @@ async function authLogin(): Promise<void> {
     w(D("Let's get you set up. Takes about a minute.") + '\n\n');
 
     // Step 1 · provider (numbered menu).
-    w(A('Step 1 of 3') + D(' · Choose your provider') + '\n');
+    w(A('Step 1') + D(' · Choose your provider') + '\n');
     w(`  ${A('1')}) 9router     ${D('Claude models via the company proxy  (recommended)')}\n`);
     w(`  ${A('2')}) Anthropic   ${D('Claude, direct')}\n`);
     w(`  ${A('3')}) OpenAI      ${D('GPT models, direct')}\n`);
@@ -78,7 +77,7 @@ async function authLogin(): Promise<void> {
     }
 
     // Step 2 · API key.
-    w('\n' + A('Step 2 of 3') + D(' · Your API key') + '\n');
+    w('\n' + A('Step 2') + D(' · Your API key') + '\n');
     const from = choice.id === '9router' ? ' (from the 9router dashboard)' : '';
     w(D(`  Paste your ${choice.keyLabel} key${from}:`) + '\n');
     w(D('  (ask Daffa for the API key)') + '\n');
@@ -88,14 +87,12 @@ async function authLogin(): Promise<void> {
       if (!apiKey) w(D('  A key is required.\n'));
     }
 
-    // Step 3 · endpoint (only for OpenAI-compatible providers).
-    let baseUrl: string | undefined;
+    // Step 3 · endpoint. 9router is hardcoded (defaultBaseUrl); only direct OpenAI asks.
+    let baseUrl: string | undefined = choice.defaultBaseUrl;
     if (choice.askBaseUrl) {
-      w('\n' + A('Step 3 of 3') + D(' · Endpoint') + '\n');
-      const def = choice.defaultBaseUrl;
-      const prompt = def ? `  base URL  [${def}]: ` : '  base URL (blank for api.openai.com): ';
-      const ans = (await rl.question(prompt)).trim();
-      baseUrl = ans || def;
+      w('\n' + A('Step 3') + D(' · Endpoint') + '\n');
+      const ans = (await rl.question('  base URL (blank for api.openai.com): ')).trim();
+      baseUrl = ans || choice.defaultBaseUrl;
     }
 
     const patch = buildOnboardPatch(choice, apiKey, baseUrl);

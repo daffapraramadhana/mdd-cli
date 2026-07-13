@@ -32,17 +32,13 @@ npm install -g mdd-cli
 mdd
 ```
 
-You'll be asked which provider and for your API key. **To use the company 9router**,
-choose `openai`, paste your 9router key (from the 9router dashboard), and when it asks
-for the base URL enter:
+A short wizard walks you through it. **For the company 9router**, just:
 
-```
-http://localhost:20128/v1
-```
+1. Choose **`1) 9router`**
+2. Paste your API key *(ask Daffa for it)*
 
-Then pick a model with `/models` (e.g. `cc/claude-sonnet-5`) and start chatting.
-
-That's it. 🎉
+That's it — the endpoint and a good default model are set for you. Pick a different
+model any time with `/models`, then start chatting. 🎉
 
 **Update later:**
 
@@ -89,7 +85,7 @@ and use a 9router model id. The setup wizard stores this for you, or per-invocat
 
 ```bash
 mdd --provider openai \
-    --base-url http://localhost:20128/v1 \
+    --base-url http://192.168.7.8:20128/v1 \
     --model cc/claude-sonnet-5 \
     "explain this repo"
 ```

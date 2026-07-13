@@ -2,7 +2,7 @@
 // Pure logic behind the first-run onboarding wizard (the interactive I/O lives in cli.ts).
 import type { Config } from './config/index.js';
 
-export const NINEROUTER_URL = 'http://localhost:20128/v1';
+export const NINEROUTER_URL = 'http://192.168.7.8:20128/v1';
 
 export interface OnboardChoice {
   id: '9router' | 'anthropic' | 'openai';
@@ -19,7 +19,8 @@ export interface OnboardChoice {
 export function onboardChoice(input: string): OnboardChoice | null {
   const c = input.trim().toLowerCase();
   if (c === '1' || c === '9router' || c === 'nine') {
-    return { id: '9router', label: '9router', defaultProvider: 'openai', defaultModel: 'cc/claude-sonnet-5', keyField: 'openaiApiKey', keyLabel: '9router', askBaseUrl: true, defaultBaseUrl: NINEROUTER_URL };
+    // 9router endpoint is hardcoded (company proxy) — no base-URL step for coworkers.
+    return { id: '9router', label: '9router', defaultProvider: 'openai', defaultModel: 'cc/claude-sonnet-5', keyField: 'openaiApiKey', keyLabel: '9router', askBaseUrl: false, defaultBaseUrl: NINEROUTER_URL };
   }
   if (c === '2' || c === 'anthropic' || c === 'claude') {
     return { id: 'anthropic', label: 'Anthropic', defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-8', keyField: 'anthropicApiKey', keyLabel: 'Anthropic', askBaseUrl: false };

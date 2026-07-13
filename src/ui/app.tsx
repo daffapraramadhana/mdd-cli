@@ -10,10 +10,10 @@ import { getTheme, type Theme } from './theme.js';
 import { spinnerFrame, thinkingDots, cursorFrame } from './spinner.js';
 import { SelectList } from './select.js';
 import { Header } from './header.js';
+import { VERSION } from '../version.js';
 
 const GUTTER = 5;
 const HINTS = '/model  /theme  /help  /exit';
-const VERSION = '0.1.0';
 const WINDOW = 200; // max transcript items laid out in the fullscreen viewport
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {

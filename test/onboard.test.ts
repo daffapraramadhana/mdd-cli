@@ -2,13 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { onboardChoice, buildOnboardPatch, NINEROUTER_URL } from '../src/onboard.js';
 
 describe('onboardChoice', () => {
-  it('maps 9router (option 1) to the openai provider with a cc/ model + base URL', () => {
+  it('maps 9router (option 1) to openai + cc/ model, with a hardcoded (not asked) base URL', () => {
     const c = onboardChoice('1')!;
     expect(c.id).toBe('9router');
     expect(c.defaultProvider).toBe('openai');
     expect(c.defaultModel).toBe('cc/claude-sonnet-5');
     expect(c.defaultBaseUrl).toBe(NINEROUTER_URL);
-    expect(c.askBaseUrl).toBe(true);
+    expect(NINEROUTER_URL).toBe('http://192.168.7.8:20128/v1');
+    expect(c.askBaseUrl).toBe(false); // hardcoded — no endpoint step
   });
   it('maps anthropic (option 2) with no base-url step', () => {
     const c = onboardChoice('2')!;
