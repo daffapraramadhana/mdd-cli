@@ -20,6 +20,7 @@ import { resolve } from 'node:path';
 
 const GUTTER = 5;
 const HINTS = '/model  /resume  /theme  /help  /exit';
+const fmtElapsed = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {
   return (
@@ -32,12 +33,21 @@ function Row({ label, color, children }: { label: string; color?: string; childr
   );
 }
 
-function ToolLine({ marker, color, text, ms }: { marker: string; color?: string; text: string; ms?: number }) {
+function ToolLine({ marker, color, text, ms, elapsed, preview, rail }: { marker: string; color?: string; text: string; ms?: number; elapsed?: string; preview?: string; rail?: boolean }) {
   return (
-    <Box>
-      <Box width={GUTTER} flexShrink={0}><Text> </Text></Box>
-      <Text color={color}>{`${marker} ${text}`}</Text>
-      {ms !== undefined ? <Text dimColor>{`  ${ms}ms`}</Text> : null}
+    <Box flexDirection="column">
+      <Box>
+        <Box width={GUTTER} flexShrink={0}><Text dimColor>{rail ? '  │  ' : ' '}</Text></Box>
+        <Text color={color}>{`${marker} ${text}`}</Text>
+        {ms !== undefined ? <Text dimColor>{`  ${ms}ms`}</Text> : null}
+        {elapsed ? <Text dimColor>{`  ${elapsed}`}</Text> : null}
+      </Box>
+      {preview ? (
+        <Box>
+          <Box width={GUTTER} flexShrink={0}><Text dimColor>{rail ? '  │  ' : ' '}</Text></Box>
+          <Text dimColor>{preview}</Text>
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -46,7 +56,7 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
   if (item.kind === 'user') {
     return (
       <Box key={key} flexDirection="column" marginTop={1}>
-        {userNum > 1 ? <Text dimColor>{'─'.repeat(48)}</Text> : null}
+        {userNum > 1 ? <Text dimColor>{'· '.repeat(24).trimEnd()}</Text> : null}
         <Box>
           <Box width={GUTTER} flexShrink={0}><Text color={theme.user} bold>You</Text></Box>
           <Text>{item.text}</Text>
@@ -69,7 +79,8 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
   const ok = item.status === 'ok';
   return (
     <ToolLine key={key} marker={ok ? '✓' : '✗'} color={ok ? theme.toolOk : theme.toolError}
-      text={`${toolIcon(item.name)} ${formatToolCall(item.name, item.input)}`} ms={item.durationMs} />
+      text={`${toolIcon(item.name)} ${formatToolCall(item.name, item.input)}`} ms={item.durationMs}
+      preview={item.preview} rail />
   );
 }
 
@@ -144,7 +155,8 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
         </Row>
       ) : null}
       {state.activeTool ? (
-        <ToolLine marker={spinnerFrame(tick)} color={theme.toolRun}
+        <ToolLine marker={spinnerFrame(tick)} color={theme.toolRun} rail
+          elapsed={fmtElapsed(Date.now() - state.activeTool.startedAt)}
           text={`${toolIcon(state.activeTool.name)} ${formatToolCall(state.activeTool.name, state.activeTool.input)}`} />
       ) : null}
       {thinking ? (

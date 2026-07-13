@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import { App } from '../../src/ui/app.js';
 import { UiStore } from '../../src/ui/store.js';
@@ -234,5 +234,25 @@ describe('App', () => {
     } finally {
       rmSync(imgPath, { force: true });
     }
+  });
+
+  it('renders a dim preview line under a finished tool', () => {
+    const store = new UiStore(() => 0);
+    store.setMeta({ provider: 'anthropic', model: 'm', cwd: '~/x', autoApprove: false });
+    store.startTool('list_dir', { path: '.' });
+    store.endTool('ok', 'a.ts\nb.ts\nc.ts');
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame()).toContain('3 entries');
+  });
+
+  it('shows a live elapsed label on the running tool', () => {
+    const store = new UiStore(() => 0);       // startedAt = 0
+    store.setMeta({ provider: 'anthropic', model: 'm', cwd: '~/x', autoApprove: false });
+    store.setStatus('busy');
+    store.startTool('read_file', { path: 'a.ts' });
+    vi.spyOn(Date, 'now').mockReturnValue(1200);
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame()).toMatch(/1\.2s/);
+    vi.restoreAllMocks();
   });
 });
