@@ -11,7 +11,7 @@ import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { UiStore, mountApp, mountFullscreen, shortenCwd, type SessionMeta } from './ui/index.js';
+import { UiStore, mountApp, shortenCwd, type SessionMeta } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
 import { THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
 import { formatModels, KNOWN_MODELS } from './models.js';
@@ -228,10 +228,14 @@ async function repl(opts: RunOpts): Promise<void> {
     })();
   };
 
+  // Assigned just below; /exit unmounts the app so ink restores the terminal cleanly.
+  let app: { unmount(): void; waitUntilExit(): Promise<void> } | undefined;
+  const exit = (): void => { if (app) app.unmount(); else process.exit(0); };
+
   const onSubmit = async (line: string): Promise<void> => {
     if (running) return;
     if (line.startsWith('/')) {
-      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, exit: () => process.exit(0) });
+      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, exit });
       return;
     }
     running = true;
@@ -254,8 +258,8 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  // Fullscreen alternate-screen TUI (Header box at top, transcript viewport, input pinned).
-  const app = mountFullscreen(store, (line) => { void onSubmit(line); });
+  // Inline REPL with a welcome header — conversation stays in scrollback and persists on exit.
+  app = mountApp(store, (line) => { void onSubmit(line); }, true);
   await app.waitUntilExit();
 }
 
