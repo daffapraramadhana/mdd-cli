@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTheme, THEME_NAMES, hexToRgb, gradientColors, gradientText } from '../../src/ui/theme.js';
+import { getTheme, THEME_NAMES, hexToRgb, gradientColors, gradientText, rgbToHex, gradientHexes } from '../../src/ui/theme.js';
 import { spinnerFrame, thinkingDots, cursorFrame, SPINNER_FRAMES } from '../../src/ui/spinner.js';
 
 describe('themes', () => {
@@ -29,6 +29,11 @@ describe('gradient', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('\x1b[38;2;0;0;0m');
     expect(lines[0]).toContain('a');
+  });
+  it('converts rgb to hex and builds gradient hex stops', () => {
+    expect(rgbToHex([255, 128, 0])).toBe('#ff8000');
+    const hexes = gradientHexes(3, ['#000000', '#ffffff']);
+    expect(hexes).toEqual(['#000000', '#808080', '#ffffff']);
   });
 });
 
