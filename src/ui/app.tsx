@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Box, Text, Static, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 import { sanitizeInput } from './scroll.js';
@@ -13,6 +13,7 @@ import { SelectList } from './select.js';
 import { Header } from './header.js';
 import { VERSION } from '../version.js';
 import { formatUsage } from '../usage.js';
+import { createPasteState, applyChange, expandPastes } from './paste.js';
 
 const GUTTER = 5;
 const HINTS = '/model  /resume  /theme  /help  /exit';
@@ -74,10 +75,13 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
 // selectable), while the live streaming region, input, and status bar re-render in place at
 // the bottom. `showHeader` prints the banner once as the first Static item so it sits at the
 // top of scrollback (like Claude Code) instead of being frozen in an alternate screen.
-export function App({ store, onSubmit, showHeader = false }: { store: UiStore; onSubmit: (line: string) => void; showHeader?: boolean }) {
+export interface SubmitInput { display: string; text: string }
+
+export function App({ store, onSubmit, showHeader = false }: { store: UiStore; onSubmit: (input: SubmitInput) => void; showHeader?: boolean }) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
   const [tick, setTick] = useState(0);
+  const pasteRef = useRef(createPasteState());
   const { stdout } = useStdout();
   const width = Math.max(8, (stdout?.columns ?? 80));
 
@@ -92,11 +96,14 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
   }, [animating]);
 
   const handleSubmit = (v: string) => {
-    if (state.pendingPrompt !== null) { setValue(''); store.resolvePrompt(v); return; }
+    if (state.pendingPrompt !== null) { setValue(''); pasteRef.current = createPasteState(); store.resolvePrompt(v); return; }
     // A turn is running: keep the draft in the box (don't clear, don't send) until it's idle.
     if (state.status === 'busy') return;
+    const display = v.trim();
+    const map = pasteRef.current.map;
     setValue('');
-    if (v.trim()) onSubmit(v.trim());
+    pasteRef.current = createPasteState();
+    if (display) onSubmit({ display, text: expandPastes(display, map) });
   };
 
   const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool;
@@ -148,7 +155,15 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
       <Box paddingLeft={1}>
         <Text color={theme.accent}>{'> '}</Text>
         {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
-        <TextInput value={value} onChange={(v) => setValue(sanitizeInput(v))} onSubmit={handleSubmit} />
+        <TextInput
+          value={value}
+          onChange={(next) => {
+            const r = applyChange(value, sanitizeInput(next), pasteRef.current, Date.now());
+            pasteRef.current = r.state;
+            setValue(r.value);
+          }}
+          onSubmit={handleSubmit}
+        />
         {/* Own dim hint instead of ink-text-input's placeholder, so the cursor is a clean
             block and not an inverted first letter ("A"). Only when idle + empty. */}
         {state.status === 'idle' && state.pendingPrompt === null && value === '' ? <Text dimColor>Ask anything…</Text> : null}

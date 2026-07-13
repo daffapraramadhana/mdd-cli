@@ -13,7 +13,7 @@ import { buildRegistry } from './tools/index.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { UiStore, mountApp, shortenCwd, type SessionMeta } from './ui/index.js';
+import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
 import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
 import { LOGO } from './ui/banner.js';
@@ -351,17 +351,17 @@ async function repl(opts: RunOpts): Promise<void> {
   let app: { unmount(): void; waitUntilExit(): Promise<void> } | undefined;
   const exit = (): void => { if (app) app.unmount(); else process.exit(0); };
 
-  const onSubmit = async (line: string): Promise<void> => {
+  const onSubmit = async (input: SubmitInput): Promise<void> => {
     if (running) return;
-    if (line.startsWith('/')) {
-      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit });
+    if (input.display.startsWith('/')) {
+      handleReplCommand(input.display, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit });
       return;
     }
     running = true;
-    store.addUser(line);
-    if (!title) title = truncateTitle(line);
+    store.addUser(input.display);
+    if (!title) title = truncateTitle(input.display);
     store.setStatus('busy');
-    messages.push({ role: 'user', content: [{ type: 'text', text: line }] });
+    messages.push({ role: 'user', content: [{ type: 'text', text: input.text }] });
     const h = streamHandlers(store);
     try {
       await runTurn(messages, {
@@ -415,7 +415,7 @@ async function repl(opts: RunOpts): Promise<void> {
 
   // Interactive REPL in the normal terminal buffer: native smooth scroll, banner at the top
   // of scrollback, status pinned at the bottom. History persists in scrollback after exit.
-  app = mountApp(store, (line) => { void onSubmit(line); }, { showHeader: true });
+  app = mountApp(store, (input) => { void onSubmit(input); }, { showHeader: true });
   await app.waitUntilExit();
 }
 

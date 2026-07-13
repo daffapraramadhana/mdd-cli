@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { render } from 'ink-testing-library';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, cleanup } from 'ink-testing-library';
 import { App } from '../../src/ui/app.js';
 import { UiStore } from '../../src/ui/store.js';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('App', () => {
   it('renders streaming text and an input line when idle', () => {
@@ -141,5 +145,44 @@ describe('App', () => {
     const frame = lastFrame() ?? '';
     expect(frame).not.toContain('[<64'); // escape sequence stripped
     expect(frame).not.toContain('64;10;5');
+  });
+
+  // ink-testing-library's stdin.write() dispatches through Ink/React 19's async scheduler:
+  // state updates from it are not observable in lastFrame() until the next event-loop tick.
+  const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  it('collapses a long multi-line paste into a chip in the input', async () => {
+    const store = new UiStore();
+    const { lastFrame, stdin } = render(<App store={store} onSubmit={() => {}} />);
+    const blob = Array.from({ length: 30 }, (_, i) => `SENTINEL_LINE_${i}`).join('\n');
+    stdin.write(blob);
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('[Pasted text #1');
+    expect(frame).not.toContain('SENTINEL_LINE_15'); // raw blob is not shown
+  });
+
+  it('leaves a short paste literal in the input', async () => {
+    const store = new UiStore();
+    const { lastFrame, stdin } = render(<App store={store} onSubmit={() => {}} />);
+    stdin.write('just a short line');
+    await tick();
+    expect(lastFrame() ?? '').toContain('just a short line');
+    expect(lastFrame() ?? '').not.toContain('[Pasted text');
+  });
+
+  it('submits the collapsed display and the fully expanded text', async () => {
+    const store = new UiStore();
+    let received: { display: string; text: string } | null = null;
+    const { stdin } = render(<App store={store} onSubmit={(input) => { received = input; }} />);
+    const blob = Array.from({ length: 30 }, (_, i) => `SENTINEL_LINE_${i}`).join('\n');
+    stdin.write(blob);
+    await tick();
+    stdin.write('\r'); // Enter
+    await tick();
+    expect(received).not.toBeNull();
+    expect(received!.display).toContain('[Pasted text #1');
+    expect(received!.text).toContain('SENTINEL_LINE_15'); // model gets the full blob
+    expect(received!.text).not.toContain('[Pasted text'); // no token leaks to the model
   });
 });
