@@ -13,9 +13,16 @@ import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { UiStore, mountApp, mountFullscreen, shortenCwd, type SessionMeta } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
-import { THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
+import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
+import { LOGO } from './ui/banner.js';
+import { onboardChoice, buildOnboardPatch, type OnboardChoice } from './onboard.js';
 import { formatModels, KNOWN_MODELS } from './models.js';
 import type { Message } from './types.js';
+
+// Small ANSI helpers for the pre-TUI onboarding output.
+const A = (s: string): string => `\x1b[1m\x1b[35m${s}\x1b[0m`; // bold magenta accent
+const D = (s: string): string => `\x1b[2m${s}\x1b[0m`;         // dim
+const G = (s: string): string => `\x1b[32m${s}\x1b[0m`;        // green
 
 const VERSION = '0.1.0';
 
@@ -52,18 +59,52 @@ export function hasKeyFor(config: Config, name: 'anthropic' | 'openai'): boolean
 
 async function authLogin(): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const w = (s: string): void => { process.stdout.write(s); };
   try {
-    const which = (await rl.question('Configure which provider? [anthropic/openai/both]: ')).trim().toLowerCase();
-    const patch: Partial<Config> = {};
-    if (which === 'anthropic' || which === 'both') patch.anthropicApiKey = (await rl.question('Anthropic API key: ')).trim();
-    if (which === 'openai' || which === 'both') {
-      patch.openaiApiKey = (await rl.question('OpenAI API key: ')).trim();
-      const baseUrl = (await rl.question('OpenAI base URL (blank for default; e.g. http://localhost:20128/v1 for 9router): ')).trim();
-      if (baseUrl) patch.openaiBaseUrl = baseUrl;
+    // Splash — gradient MDD logo + welcome.
+    w('\n' + gradientText(LOGO.join('\n'), getTheme(DEFAULT_THEME).gradient) + '\n');
+    w(A('Welcome to mdd') + ' — your terminal coding assistant.\n');
+    w(D("Let's get you set up. Takes about a minute.") + '\n\n');
+
+    // Step 1 · provider (numbered menu).
+    w(A('Step 1 of 3') + D(' · Choose your provider') + '\n');
+    w(`  ${A('1')}) 9router     ${D('Claude models via the company proxy  (recommended)')}\n`);
+    w(`  ${A('2')}) Anthropic   ${D('Claude, direct')}\n`);
+    w(`  ${A('3')}) OpenAI      ${D('GPT models, direct')}\n`);
+    let choice: OnboardChoice | null = null;
+    while (!choice) {
+      choice = onboardChoice(await rl.question('  › '));
+      if (!choice) w(D('  Please enter 1, 2, or 3.\n'));
     }
-    if (which === 'openai') { patch.defaultProvider = 'openai'; patch.defaultModel = 'gpt-5'; }
+
+    // Step 2 · API key.
+    w('\n' + A('Step 2 of 3') + D(' · Your API key') + '\n');
+    const from = choice.id === '9router' ? ' (from the 9router dashboard)' : '';
+    w(D(`  Paste your ${choice.keyLabel} key${from}:`) + '\n');
+    let apiKey = '';
+    while (!apiKey) {
+      apiKey = (await rl.question('  › ')).trim();
+      if (!apiKey) w(D('  A key is required.\n'));
+    }
+
+    // Step 3 · endpoint (only for OpenAI-compatible providers).
+    let baseUrl: string | undefined;
+    if (choice.askBaseUrl) {
+      w('\n' + A('Step 3 of 3') + D(' · Endpoint') + '\n');
+      const def = choice.defaultBaseUrl;
+      const prompt = def ? `  base URL  [${def}]: ` : '  base URL (blank for api.openai.com): ';
+      const ans = (await rl.question(prompt)).trim();
+      baseUrl = ans || def;
+    }
+
+    const patch = buildOnboardPatch(choice, apiKey, baseUrl);
     await saveConfig(patch);
-    process.stdout.write('Saved to ~/.config/mdd/config.json\n');
+
+    // Success screen.
+    const via = choice.id === '9router' ? ' via 9router' : '';
+    w('\n' + G('✓ All set') + D(' — saved to ~/.config/mdd/config.json') + '\n');
+    w(D(`  Using: ${patch.defaultProvider} · ${patch.defaultModel}${via}`) + '\n\n');
+    w(D('  Try:  ') + A('/models') + D(' pick a model    ') + A('/theme') + D(' colors    ') + A('/help') + D(' all commands') + '\n\n');
   } finally { rl.close(); }
 }
 
@@ -199,12 +240,11 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
 async function repl(opts: RunOpts): Promise<void> {
   let config = await loadConfig();
 
-  // Guided first run: no key configured yet → walk the user through setup, then continue.
+  // Guided first run: no key configured yet → the welcoming wizard, then continue.
   const wanted = opts.provider ?? config.defaultProvider;
   if (!hasKeyFor(config, wanted)) {
-    process.stdout.write('\nWelcome to mdd! Let\'s get you set up (one time).\n\n');
     await authLogin();
-    process.stdout.write('\n');
+    process.stdout.write(D('Starting mdd…') + '\n');
     config = await loadConfig();
   }
 
