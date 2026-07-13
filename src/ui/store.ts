@@ -1,9 +1,10 @@
+import { summarizePreview } from './format.js';
 import type { SessionMeta } from './banner.js';
 
 export type TranscriptItem =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
-  | { kind: 'tool'; name: string; input: unknown; status: 'ok' | 'error'; durationMs: number }
+  | { kind: 'tool'; name: string; input: unknown; status: 'ok' | 'error'; durationMs: number; preview?: string }
   | { kind: 'system'; text: string };
 
 export interface ActiveTool { name: string; input: unknown; startedAt: number; }
@@ -20,16 +21,18 @@ export interface UiState {
   themeName: string;
   pendingSelect: PendingSelect | null;
   usage: { inputTokens: number; outputTokens: number };
+  turnStartedAt: number | null;
 }
 
 export class UiStore {
   private state: UiState = {
     transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
-    themeName: 'neon', pendingSelect: null, usage: { inputTokens: 0, outputTokens: 0 },
+    themeName: 'neon', pendingSelect: null, usage: { inputTokens: 0, outputTokens: 0 }, turnStartedAt: null,
   };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
   private selectResolver: ((value: string | null) => void) | null = null;
+  private abortHook: (() => void) | null = null;
 
   constructor(private now: () => number = Date.now) {}
 
@@ -67,15 +70,15 @@ export class UiStore {
     this.set({ activeTool: { name, input, startedAt: this.now() } });
   };
 
-  // A tool finishes: move the active tool into the transcript with its outcome + elapsed time.
-  endTool = (status: 'ok' | 'error'): void => {
+  // A tool finishes: move the active tool into the transcript with its outcome, elapsed time,
+  // and (if the result summarizes to something) a one-line preview.
+  endTool = (status: 'ok' | 'error', content?: string): void => {
     const active = this.state.activeTool;
     if (!active) return;
     const durationMs = Math.max(0, this.now() - active.startedAt);
-    this.set({
-      transcript: [...this.state.transcript, { kind: 'tool', name: active.name, input: active.input, status, durationMs }],
-      activeTool: null,
-    });
+    const preview = summarizePreview(active.name, content, status === 'error');
+    const item: TranscriptItem = { kind: 'tool', name: active.name, input: active.input, status, durationMs, ...(preview ? { preview } : {}) };
+    this.set({ transcript: [...this.state.transcript, item], activeTool: null });
   };
 
   setTheme = (themeName: string): void => { this.set({ themeName }); };
@@ -109,7 +112,9 @@ export class UiStore {
     this.set({ transcript: items, streaming: '' });
   };
 
-  setStatus = (status: 'idle' | 'busy'): void => { this.set({ status }); };
+  setStatus = (status: 'idle' | 'busy'): void => {
+    this.set({ status, turnStartedAt: status === 'busy' ? this.now() : null });
+  };
 
   setMeta = (meta: SessionMeta): void => { this.set({ meta }); };
 
@@ -122,4 +127,8 @@ export class UiStore {
     this.set({ pendingPrompt: null });
     r?.(answer);
   };
+
+  setAbort = (fn: (() => void) | null): void => { this.abortHook = fn; };
+
+  requestAbort = (): void => { this.abortHook?.(); };
 }
