@@ -23,6 +23,7 @@ export function Header({ theme, version }: { theme: Theme; version: string }) {
       <Box flexDirection="column">
         <Logo theme={theme} />
         <Text dimColor>{`terminal coding assistant · v${version}`}</Text>
+        <Text dimColor>ask Daffa for any question</Text>
       </Box>
       <Box flexDirection="column" marginLeft={2}>
         <Text color={theme.accent} bold>Commands</Text>

@@ -81,6 +81,7 @@ async function authLogin(): Promise<void> {
     w('\n' + A('Step 2 of 3') + D(' · Your API key') + '\n');
     const from = choice.id === '9router' ? ' (from the 9router dashboard)' : '';
     w(D(`  Paste your ${choice.keyLabel} key${from}:`) + '\n');
+    w(D('  (ask Daffa for the API key)') + '\n');
     let apiKey = '';
     while (!apiKey) {
       apiKey = (await rl.question('  › ')).trim();
