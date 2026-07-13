@@ -228,10 +228,14 @@ async function repl(opts: RunOpts): Promise<void> {
     })();
   };
 
+  // Assigned just below; /exit unmounts the app so ink restores the terminal cleanly.
+  let app: { unmount(): void; waitUntilExit(): Promise<void> } | undefined;
+  const exit = (): void => { if (app) app.unmount(); else process.exit(0); };
+
   const onSubmit = async (line: string): Promise<void> => {
     if (running) return;
     if (line.startsWith('/')) {
-      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, exit: () => process.exit(0) });
+      handleReplCommand(line, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, exit });
       return;
     }
     running = true;
@@ -255,7 +259,7 @@ async function repl(opts: RunOpts): Promise<void> {
   };
 
   // Fullscreen alternate-screen TUI (Header box at top, transcript viewport, input pinned).
-  const app = mountFullscreen(store, (line) => { void onSubmit(line); });
+  app = mountFullscreen(store, (line) => { void onSubmit(line); });
   await app.waitUntilExit();
 }
 

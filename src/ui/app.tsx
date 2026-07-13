@@ -12,7 +12,7 @@ import { SelectList } from './select.js';
 import { Header } from './header.js';
 
 const GUTTER = 5;
-const HINTS = '/model  /theme  /help';
+const HINTS = '/model  /theme  /help  /exit';
 const VERSION = '0.1.0';
 const WINDOW = 200; // max transcript items laid out at once (older ones clip anyway)
 
