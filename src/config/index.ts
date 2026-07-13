@@ -9,6 +9,8 @@ export interface Config {
   openaiApiKey?: string;
   /** Custom OpenAI-compatible base URL, e.g. http://localhost:20128/v1 for 9router. */
   openaiBaseUrl?: string;
+  /** TUI theme name (neon | ocean | mono). */
+  theme?: string;
 }
 
 const DEFAULTS: Config = { defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-8' };

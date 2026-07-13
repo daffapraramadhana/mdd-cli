@@ -3,6 +3,19 @@
 
 const PATH_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'list_dir']);
 
+const TOOL_ICONS: Record<string, string> = {
+  read_file: '▤',
+  write_file: '✎',
+  edit_file: '✎',
+  list_dir: '▸',
+  run_shell: '❯',
+  git: '⎇',
+};
+
+export function toolIcon(name: string): string {
+  return TOOL_ICONS[name] ?? '•';
+}
+
 export function formatToolCall(name: string, input: unknown): string {
   const o = (input ?? {}) as Record<string, unknown>;
   const str = (k: string): string | undefined => (typeof o[k] === 'string' ? (o[k] as string) : undefined);

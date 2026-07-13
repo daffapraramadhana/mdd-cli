@@ -50,7 +50,7 @@ export function parseInline(line: string): InlineToken[] {
   return tokens;
 }
 
-function Line({ line }: { line: string }) {
+function Line({ line, accent }: { line: string; accent: string }) {
   const heading = /^#{1,6}\s+(.*)$/.exec(line);
   if (heading) return <Text bold>{renderTokens(parseInline(heading[1]))}</Text>;
   const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line);
@@ -58,7 +58,7 @@ function Line({ line }: { line: string }) {
     return (
       <Text>
         {bullet[1]}
-        <Text color="magenta">• </Text>
+        <Text color={accent}>• </Text>
         {renderTokens(parseInline(bullet[2]))}
       </Text>
     );
@@ -74,18 +74,18 @@ function renderTokens(tokens: InlineToken[]) {
   });
 }
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, codeColor = 'gray', accent = 'magenta' }: { text: string; codeColor?: string; accent?: string }) {
   const blocks = splitBlocks(text);
   return (
     <Box flexDirection="column">
       {blocks.map((b, i) =>
         b.type === 'code' ? (
-          <Box key={i} flexDirection="column" borderStyle="round" borderColor="gray" borderTop={false} borderRight={false} borderBottom={false} paddingLeft={1}>
-            {(b.lines.length ? b.lines : ['']).map((l, j) => <Text key={j} color="gray">{l}</Text>)}
+          <Box key={i} flexDirection="column" borderStyle="round" borderColor={codeColor} paddingX={1}>
+            {(b.lines.length ? b.lines : ['']).map((l, j) => <Text key={j} color={codeColor}>{l}</Text>)}
           </Box>
         ) : (
           <Box key={i} flexDirection="column">
-            {b.content.split('\n').map((l, j) => <Line key={j} line={l} />)}
+            {b.content.split('\n').map((l, j) => <Line key={j} line={l} accent={accent} />)}
           </Box>
         ),
       )}

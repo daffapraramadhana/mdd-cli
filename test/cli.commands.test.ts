@@ -10,10 +10,12 @@ function setup(config: Partial<Config> = {}, initial: Partial<ReplSession> = {})
   const store = new UiStore();
   let refreshed = 0;
   let exited = false;
+  let appliedTheme: string | null = null;
   const session: ReplSession = {
     providerName: 'anthropic',
     model: 'claude-opus-4-8',
     provider: fakeProvider('anthropic'),
+    theme: 'neon',
     ...initial,
   };
   const fullConfig: Config = { defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-8', ...config };
@@ -22,13 +24,14 @@ function setup(config: Partial<Config> = {}, initial: Partial<ReplSession> = {})
     effectiveConfig: fullConfig,
     store,
     refreshMeta: () => { refreshed++; },
+    applyTheme: (name) => { appliedTheme = name; },
     exit: () => { exited = true; },
   };
   const lastSystem = () => {
     const items = store.getState().transcript.filter((t) => t.kind === 'system') as { text: string }[];
     return items.at(-1)?.text ?? '';
   };
-  return { store, session, deps, lastSystem, refreshedCount: () => refreshed, exited: () => exited };
+  return { store, session, deps, lastSystem, refreshedCount: () => refreshed, exited: () => exited, appliedTheme: () => appliedTheme };
 }
 
 describe('handleReplCommand', () => {
@@ -78,6 +81,21 @@ describe('handleReplCommand', () => {
     const t = setup();
     handleReplCommand('/provider gemini', t.session, t.deps);
     expect(t.lastSystem()).toContain('usage: /provider');
+  });
+
+  it('/theme <name> applies a known theme', () => {
+    const t = setup();
+    handleReplCommand('/theme ocean', t.session, t.deps);
+    expect(t.session.theme).toBe('ocean');
+    expect(t.appliedTheme()).toBe('ocean');
+    expect(t.lastSystem()).toBe('→ theme set to ocean');
+  });
+
+  it('/theme with an unknown name is rejected', () => {
+    const t = setup();
+    handleReplCommand('/theme rainbow', t.session, t.deps);
+    expect(t.appliedTheme()).toBeNull();
+    expect(t.lastSystem()).toContain('unknown theme: rainbow');
   });
 
   it('/exit calls the exit hook', () => {

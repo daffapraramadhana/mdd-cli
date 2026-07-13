@@ -12,27 +12,31 @@ describe('UiStore', () => {
     expect(s.getState().transcript).toEqual([{ kind: 'assistant', text: 'hello' }]);
   });
 
-  it('commits streaming on startTool, then records the tool with status on endTool', () => {
-    const s = new UiStore();
+  it('commits streaming on startTool, then records the tool with status + timing on endTool', () => {
+    let t = 100;
+    const s = new UiStore(() => t);
     s.appendStreaming('thinking');
     s.startTool('read_file', { path: 'a' });
     // streaming is committed; the tool is "active" (running), not yet in the transcript
     expect(s.getState().transcript).toEqual([{ kind: 'assistant', text: 'thinking' }]);
-    expect(s.getState().activeTool).toEqual({ name: 'read_file', input: { path: 'a' } });
+    expect(s.getState().activeTool).toEqual({ name: 'read_file', input: { path: 'a' }, startedAt: 100 });
+    t = 175;
     s.endTool('ok');
     expect(s.getState().activeTool).toBeNull();
     expect(s.getState().transcript).toEqual([
       { kind: 'assistant', text: 'thinking' },
-      { kind: 'tool', name: 'read_file', input: { path: 'a' }, status: 'ok' },
+      { kind: 'tool', name: 'read_file', input: { path: 'a' }, status: 'ok', durationMs: 75 },
     ]);
   });
 
   it('records an error status when a tool fails', () => {
-    const s = new UiStore();
+    let t = 0;
+    const s = new UiStore(() => t);
     s.startTool('run_shell', { command: 'false' });
+    t = 10;
     s.endTool('error');
     expect(s.getState().transcript).toEqual([
-      { kind: 'tool', name: 'run_shell', input: { command: 'false' }, status: 'error' },
+      { kind: 'tool', name: 'run_shell', input: { command: 'false' }, status: 'error', durationMs: 10 },
     ]);
   });
 
