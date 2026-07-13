@@ -66,6 +66,14 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
       </Box>
     );
   }
+  if (item.kind === 'reasoning') {
+    return (
+      <Box key={key} marginTop={1}>
+        <Box width={GUTTER} flexShrink={0}><Text> </Text></Box>
+        <Text dimColor>{`✻ Thought for ${(item.durationMs / 1000).toFixed(1)}s`}</Text>
+      </Box>
+    );
+  }
   const ok = item.status === 'ok';
   return (
     <ToolLine key={key} marker={ok ? '✓' : '✗'} color={ok ? theme.toolOk : theme.toolError}
@@ -121,7 +129,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
     if (display) onSubmit({ display, text, imagePaths });
   };
 
-  const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool;
+  const thinking = state.status === 'busy' && state.pendingPrompt === null && !state.streaming && !state.activeTool && !state.reasoning;
   const meta = state.meta;
 
   let userNum = 0;
@@ -135,6 +143,14 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
 
   const liveRows = (
     <>
+      {state.reasoning ? (
+        <Row label="MDD" color={theme.assistant}>
+          <Box flexDirection="column">
+            <Text dimColor>{`✻ Thinking${thinkingDots(tick)}`}</Text>
+            <Text dimColor italic>{state.reasoning.split('\n').slice(-8).join('\n')}</Text>
+          </Box>
+        </Row>
+      ) : null}
       {state.streaming ? (
         <Row label="MDD" color={theme.assistant}>
           <Box flexDirection="column">

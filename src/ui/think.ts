@@ -1,6 +1,7 @@
 // src/ui/think.ts
-// Streaming filter that drops <think>…</think> reasoning from the visible response.
+// Streaming filter that SEPARATES <think>…</think> reasoning from the visible response.
 // Tags may be split across deltas, so partial tags at a chunk boundary are held back.
+// Returns two channels per call: `visible` (answer text) and `thinking` (reasoning).
 
 const OPEN = '<think>';
 const CLOSE = '</think>';
@@ -9,10 +10,11 @@ export class ThinkSplitter {
   private buf = '';
   private inThink = false;
 
-  /** Feed a streamed delta; returns the visible (non-think) text ready to show. */
-  push(delta: string): string {
+  /** Feed a streamed delta; returns the visible answer text and reasoning ready to show. */
+  push(delta: string): { visible: string; thinking: string } {
     this.buf += delta;
     let out = '';
+    let think = '';
     for (;;) {
       if (!this.inThink) {
         const lt = this.buf.indexOf('<');
@@ -24,21 +26,23 @@ export class ThinkSplitter {
         out += '<'; this.buf = this.buf.slice(1); continue; // literal '<'
       } else {
         const lt = this.buf.indexOf('<');
-        if (lt === -1) { this.buf = ''; break; } // drop think content
-        this.buf = this.buf.slice(lt); // drop think content before '<'
+        if (lt === -1) { think += this.buf; this.buf = ''; break; } // reasoning content
+        think += this.buf.slice(0, lt); // reasoning before '<'
+        this.buf = this.buf.slice(lt);
         if (this.buf.startsWith(CLOSE)) { this.inThink = false; this.buf = this.buf.slice(CLOSE.length); continue; }
         if (CLOSE.startsWith(this.buf)) break; // partial "</think>" — wait
-        this.buf = this.buf.slice(1); continue; // '<' inside think — drop
+        think += '<'; this.buf = this.buf.slice(1); continue; // '<' inside think
       }
     }
-    return out;
+    return { visible: out, thinking: think };
   }
 
   /** Flush any trailing buffered text at the end of a turn. */
-  flush(): string {
-    const out = this.inThink ? '' : this.buf;
+  flush(): { visible: string; thinking: string } {
+    const visible = this.inThink ? '' : this.buf;
+    const thinking = this.inThink ? this.buf : '';
     this.buf = '';
     this.inThink = false;
-    return out;
+    return { visible, thinking };
   }
 }

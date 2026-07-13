@@ -4,6 +4,7 @@ export type TranscriptItem =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; name: string; input: unknown; status: 'ok' | 'error'; durationMs: number }
+  | { kind: 'reasoning'; durationMs: number }
   | { kind: 'system'; text: string };
 
 export interface ActiveTool { name: string; input: unknown; startedAt: number; }
@@ -13,6 +14,8 @@ export interface PendingSelect { title: string; options: string[]; }
 export interface UiState {
   transcript: TranscriptItem[];
   streaming: string;
+  reasoning: string;
+  reasoningStartedAt: number | null;
   status: 'idle' | 'busy';
   pendingPrompt: string | null;
   meta: SessionMeta | null;
@@ -24,7 +27,7 @@ export interface UiState {
 
 export class UiStore {
   private state: UiState = {
-    transcript: [], streaming: '', status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
+    transcript: [], streaming: '', reasoning: '', reasoningStartedAt: null, status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
     themeName: 'neon', pendingSelect: null, usage: { inputTokens: 0, outputTokens: 0 },
   };
   private listeners = new Set<() => void>();
@@ -50,10 +53,32 @@ export class UiStore {
   };
 
   appendStreaming = (delta: string): void => {
+    this.collapseReasoning(); // first answer delta ends the reasoning block
     this.set({ streaming: this.state.streaming + delta });
   };
 
+  appendReasoning = (delta: string): void => {
+    this.set({
+      reasoning: this.state.reasoning + delta,
+      reasoningStartedAt: this.state.reasoningStartedAt ?? this.now(),
+    });
+  };
+
+  // Reasoning "ends" (answer text starts, a tool starts, or the turn ends): drop the live
+  // block and leave a compact "✻ Thought for Ns" summary in scrollback. Idempotent no-op
+  // when no reasoning is pending, so it is safe to call from every end condition.
+  private collapseReasoning(): void {
+    if (this.state.reasoningStartedAt === null) return;
+    const durationMs = Math.max(0, this.now() - this.state.reasoningStartedAt);
+    this.set({
+      transcript: [...this.state.transcript, { kind: 'reasoning', durationMs }],
+      reasoning: '',
+      reasoningStartedAt: null,
+    });
+  }
+
   commitStreaming = (): void => {
+    this.collapseReasoning();
     if (!this.state.streaming) return;
     this.set({
       transcript: [...this.state.transcript, { kind: 'assistant', text: this.state.streaming }],
@@ -106,7 +131,7 @@ export class UiStore {
 
   // Restore a saved conversation: replace the transcript wholesale, drop any in-flight streaming.
   loadTranscript = (items: TranscriptItem[]): void => {
-    this.set({ transcript: items, streaming: '' });
+    this.set({ transcript: items, streaming: '', reasoning: '', reasoningStartedAt: null });
   };
 
   setStatus = (status: 'idle' | 'busy'): void => { this.set({ status }); };

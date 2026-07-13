@@ -1,41 +1,48 @@
 import { describe, it, expect } from 'vitest';
 import { ThinkSplitter } from '../../src/ui/think.js';
 
-function run(chunks: string[]): string {
+function run(chunks: string[]): { visible: string; thinking: string } {
   const s = new ThinkSplitter();
-  let out = '';
-  for (const c of chunks) out += s.push(c);
-  out += s.flush();
-  return out;
+  let visible = '';
+  let thinking = '';
+  for (const c of chunks) {
+    const r = s.push(c);
+    visible += r.visible;
+    thinking += r.thinking;
+  }
+  const f = s.flush();
+  return { visible: visible + f.visible, thinking: thinking + f.thinking };
 }
 
 describe('ThinkSplitter', () => {
-  it('passes plain text through unchanged', () => {
-    expect(run(['hello world'])).toBe('hello world');
+  it('passes plain text through unchanged with no thinking', () => {
+    expect(run(['hello world'])).toEqual({ visible: 'hello world', thinking: '' });
   });
 
-  it('drops a complete <think> block', () => {
-    expect(run(['a<think>secret</think>b'])).toBe('ab');
+  it('separates a complete <think> block from visible text', () => {
+    expect(run(['a<think>secret</think>b'])).toEqual({ visible: 'ab', thinking: 'secret' });
   });
 
-  it('drops an empty <think></think> block', () => {
-    expect(run(['<think></think>ok'])).toBe('ok');
+  it('yields empty thinking for an empty <think></think> block', () => {
+    expect(run(['<think></think>ok'])).toEqual({ visible: 'ok', thinking: '' });
   });
 
   it('handles a tag split across chunks', () => {
     // "<thi" | "nk>hidden</thi" | "nk>done"
-    expect(run(['<thi', 'nk>hidden</thi', 'nk>done'])).toBe('done');
+    expect(run(['<thi', 'nk>hidden</thi', 'nk>done'])).toEqual({ visible: 'done', thinking: 'hidden' });
   });
 
-  it('handles think content arriving in many small chunks', () => {
-    expect(run(['before ', '<think>', 'a', 'b', 'c', '</think>', ' after'])).toBe('before  after');
+  it('accumulates think content arriving in many small chunks', () => {
+    expect(run(['before ', '<think>', 'a', 'b', 'c', '</think>', ' after']))
+      .toEqual({ visible: 'before  after', thinking: 'abc' });
   });
 
   it('keeps a literal < that is not a think tag', () => {
-    expect(run(['x < y and <div>'])).toBe('x < y and <div>');
+    expect(run(['x < y and <div>'])).toEqual({ visible: 'x < y and <div>', thinking: '' });
   });
 
-  it('drops an unterminated think block at end of stream', () => {
-    expect(run(['visible<think>still thinking'])).toBe('visible');
+  it('surfaces an unterminated think block at end of stream', () => {
+    expect(run(['visible<think>still thinking']))
+      .toEqual({ visible: 'visible', thinking: 'still thinking' });
   });
 });
