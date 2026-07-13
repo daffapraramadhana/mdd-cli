@@ -2,18 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { formatBanner, formatStatus, formatPath, shortenCwd } from '../../src/ui/banner.js';
 
 describe('formatBanner', () => {
-  it('renders a boxed MDD header with the version', () => {
+  it('renders the big ASCII logo, the subtitle, and the version', () => {
     const b = formatBanner({ version: '0.1.0' });
-    expect(b).toContain('MDD');
+    expect(b).toContain('█'); // block-art letters
+    expect(b).toContain('terminal coding assistant');
     expect(b).toContain('v0.1.0');
-    expect(b).toContain('╭');
-    expect(b).toContain('╯');
   });
 
-  it('produces top/mid/bottom borders of equal width', () => {
-    const [top, mid, bot] = formatBanner({ version: '9.9.9' }).split('\n');
-    expect(mid.length).toBe(top.length);
-    expect(bot.length).toBe(top.length);
+  it('renders the logo as 6 art rows plus a subtitle line', () => {
+    const lines = formatBanner({ version: '9.9.9' }).split('\n');
+    expect(lines).toHaveLength(7);
+    expect(lines[0]).toContain('█');
+    expect(lines[4]).toContain('█');
+    expect(lines[6]).toContain('v9.9.9');
   });
 });
 
