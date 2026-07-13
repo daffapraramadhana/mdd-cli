@@ -49,5 +49,13 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daffapraramadhana/mdd-cli.git"
+  },
+  "homepage": "https://github.com/daffapraramadhana/mdd-cli#readme",
+  "bugs": {
+    "url": "https://github.com/daffapraramadhana/mdd-cli/issues"
   }
 }
