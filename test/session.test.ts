@@ -130,4 +130,25 @@ describe('SessionStore', () => {
     expect((await store.list('/proj/one')).map((s) => s.id)).toEqual(['a']);
     expect((await store.list('/proj/two')).map((s) => s.id)).toEqual(['b']);
   });
+
+  it('persists a tool item preview across save → load (intended, not ephemeral)', async () => {
+    const transcriptWithPreview: TranscriptItem[] = [
+      { kind: 'user', text: 'list files' },
+      {
+        kind: 'tool',
+        name: 'list_dir',
+        input: { path: '.' },
+        status: 'ok',
+        durationMs: 5,
+        preview: '16 entries',
+      },
+    ];
+    const r = record({ id: 'with-preview', transcript: transcriptWithPreview });
+    await store.save(r);
+
+    const loaded = await store.load(r.cwd, r.id);
+    expect(loaded).not.toBeNull();
+    const toolItem = loaded!.transcript.find((item) => item.kind === 'tool');
+    expect(toolItem).toMatchObject({ kind: 'tool', preview: '16 entries' });
+  });
 });

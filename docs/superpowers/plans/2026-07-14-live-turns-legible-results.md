@@ -13,7 +13,7 @@
 - Tests: `npm test` runs `vitest run`. Run a single file with `npx vitest run test/ui/<file>.test.ts`.
 - Import style in tests: `import { ... } from '../../src/ui/<name>.js'` (note the `.js` extension on TS source imports — this repo uses NodeNext resolution).
 - No new dependencies. Ink and its hooks (`useInput`, `useStdout`) are already available.
-- Preview lines are **live-only** and NOT persisted — do not add `preview` to anything `sessions.save`/`loadTranscript` round-trips beyond the in-memory transcript item. Restored sessions simply render tool items without a preview line.
+- Preview lines are **persisted with the transcript** (intended) — `preview` lives on the tool transcript item and round-trips through `sessions.save`/`loadTranscript` like the rest of the item. Restored sessions render tool items with their preview line, same as a live turn.
 - `preview` is optional on the tool transcript item. Existing `store.test.ts` assertions use `toEqual` (which ignores `undefined` properties), so an absent/undefined `preview` must not appear as a defined key.
 - Two `runTurn` call sites exist: `src/cli.ts:176` (one-shot, no keyboard — never gets interrupt) and `src/cli.ts:377` (interactive REPL — gets interrupt).
 
@@ -778,7 +778,7 @@ Add a `summarizePreview('edit_file', 'Edited a.ts (+12 −3)', false)` → `'+12
 - Turn heartbeat + interrupt hint → Task 5. ✓
 - Esc → abort → Task 6 (uses existing `signal?` seam; both `runTurn` call sites accounted for — one-shot deliberately excluded). ✓
 - Softer turn separation + tool rail → Task 4. ✓
-- Session persistence: previews live-only → enforced by Global Constraints + `endTool` omitting undefined preview; `loadTranscript` untouched. ✓
+- Session persistence: previews persist with the transcript and re-render on resume by design → `preview?` on the tool item round-trips through `sessions.save`/`loadTranscript` untouched (no special-casing needed); `endTool` still omits the key when there's no preview. ✓
 - Deferred: streaming thinking display — not in this plan (correct per spec). ✓
 - Preview-format deviation from mockup (`+X −Y`) is honestly scoped to optional Task 7. ✓
 
