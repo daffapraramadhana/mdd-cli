@@ -3,6 +3,14 @@
 All notable changes to `mdd-cli` are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-07-14
+
+### Added
+- **Update notification** — a throttled (once/day) background check on startup nudges you in the status bar when a newer version is published on npm (`↑ update available: vX.Y.Z · npm i -g mdd-cli`). Silent on failure; opt out with `MDD_NO_UPDATE_CHECK`.
+
+### Changed
+- Thinking and reasoning indicators now use a braille spinner.
+
 ## [0.3.0] - 2026-07-14
 
 A large UI/UX release: the terminal turn now feels alive and legible, and every
