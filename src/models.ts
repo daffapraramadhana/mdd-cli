@@ -16,10 +16,11 @@ export const KNOWN_MODELS: KnownModel[] = [
   { provider: 'openai', id: 'cc/claude-opus-4-8', note: '9router' },
   { provider: 'openai', id: 'cc/claude-opus-4-7', note: '9router' },
   { provider: 'openai', id: 'cc/claude-haiku-4-5-20251001', note: '9router' },
-  { provider: 'openai', id: 'cx/gpt-5.5', note: 'ai-router' },
-  { provider: 'openai', id: 'cx/gpt-5.4', note: 'ai-router' },
-  { provider: 'openai', id: 'cx/gpt-5.4-mini', note: 'ai-router' },
-  { provider: 'openai', id: 'cx/gpt-5.3-codex-spark', note: 'ai-router' },
+  { provider: 'openai', id: 'cx/gpt-5.5', note: '9router' },
+  { provider: 'openai', id: 'cx/gpt-5.4', note: '9router' },
+  { provider: 'openai', id: 'cx/gpt-5.4-mini', note: '9router' },
+  { provider: 'openai', id: 'cx/gpt-5.3-codex-spark', note: '9router' },
+  { provider: 'openai', id: 'mdd-free-combo', note: '9router' },
 ];
 
 export function formatModels(models: KnownModel[] = KNOWN_MODELS): string {
