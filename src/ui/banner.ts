@@ -2,12 +2,15 @@
 // Pure string builders for the welcome banner and the status/footer line.
 // Kept free of ink/React so they are trivially unit-testable.
 
+import { modeLabel, type Mode } from '../modes.js';
+
 export interface SessionMeta {
   provider: string;
   model: string;
   cwd: string;
   autoApprove?: boolean;
   branch?: string;
+  mode?: Mode;
 }
 
 // Big "MDD" in the ANSI Shadow figlet style, printed once at REPL start.
@@ -31,9 +34,10 @@ export function shortenCwd(cwd: string, home: string): string {
   return cwd;
 }
 
-/** The status-line content next to the `mdd` badge: `provider · model[ · auto-approve]`. */
+/** The status-line content next to the `mdd` badge: `provider · model[ · mode][ · auto-approve]`. */
 export function formatStatus(meta: SessionMeta): string {
   const parts = [meta.provider, meta.model];
+  if (meta.mode && meta.mode !== 'normal') parts.push(modeLabel(meta.mode));
   if (meta.autoApprove) parts.push('auto-approve');
   return parts.join(' · ');
 }
