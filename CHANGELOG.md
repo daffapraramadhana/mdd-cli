@@ -3,6 +3,20 @@
 All notable changes to `mdd-cli` are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-07-14
+
+The agent can now reach the web, and you can switch its permission posture on the fly.
+
+### Added
+- **Web search & fetch** — two new agent tools:
+  - `web_search` queries the web through the 9router `/v1/search` endpoint (Tavily backend) and returns titles, URLs, and snippets. It reuses your stored 9router credentials, so there's no extra config.
+  - `web_fetch` retrieves any `http(s)` URL as readable text (HTML stripped to text), with an SSRF guard that refuses `localhost`/private-network addresses.
+  - Both ask for confirmation before running (with the usual "always allow this session" option), and the agent is told about them in the system prompt.
+- **Mode cycling** — press `Shift+Tab` to rotate the session's permission posture between three modes, shown live in the status bar:
+  - **normal** — every file/shell/git change asks first (default).
+  - **auto-accept edits** — file edits (`write_file`, `edit_file`, `multi_edit`) apply without prompting; shell and git still ask.
+  - **plan** — the agent proposes a concrete plan via the new `present_plan` tool and can't touch files until you approve; approving switches back to normal and it executes.
+
 ## [0.3.1] - 2026-07-14
 
 ### Added
