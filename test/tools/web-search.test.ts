@@ -39,7 +39,7 @@ describe('webSearchTool', () => {
     expect((init as RequestInit).method).toBe('POST');
     expect((init as any).headers.Authorization).toBe('Bearer sk-test');
     const body = JSON.parse((init as any).body);
-    expect(body).toMatchObject({ model: 'searxng', query: 'ai news', search_type: 'web' });
+    expect(body).toMatchObject({ model: 'tavily', query: 'ai news', search_type: 'web' });
   });
 
   it('clamps max_results to 10', async () => {

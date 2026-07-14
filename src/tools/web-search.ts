@@ -11,6 +11,9 @@ const schema = z.object({
 
 interface SearchResult { title?: string; url?: string; snippet?: string; }
 
+/** 9router search backend model. SearXNG is self-hosted; tavily is the managed backend. */
+const SEARCH_MODEL = 'tavily';
+
 /** Derive the web-search context from stored 9router credentials. */
 export function webCtxFromConfig(config: Config): { searchEndpoint?: string; apiKey?: string } {
   const base = config.openaiBaseUrl?.replace(/\/+$/, '');
@@ -22,7 +25,7 @@ export function webCtxFromConfig(config: Config): { searchEndpoint?: string; api
 
 export const webSearchTool: Tool = {
   name: 'web_search',
-  description: 'Search the web via the 9router SearXNG endpoint. Returns titles, URLs, and snippets. Requires confirmation.',
+  description: 'Search the web via the 9router search endpoint. Returns titles, URLs, and snippets. Requires confirmation.',
   inputSchema: schema,
   mutating: true,
   handler: async (input, ctx) => {
@@ -39,7 +42,7 @@ export const webSearchTool: Tool = {
           'Content-Type': 'application/json',
           ...(ctx.web?.apiKey ? { Authorization: `Bearer ${ctx.web.apiKey}` } : {}),
         },
-        body: JSON.stringify({ model: 'searxng', query, search_type, max_results: n }),
+        body: JSON.stringify({ model: SEARCH_MODEL, query, search_type, max_results: n }),
         signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) return { content: `Search failed: HTTP ${res.status} ${res.statusText}`, isError: true };
