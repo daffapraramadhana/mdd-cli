@@ -10,9 +10,10 @@ import { searchTool } from './search.js';
 import { multiEditTool } from './multi-edit.js';
 import { askUserTool } from './ask-user.js';
 import { webFetchTool } from './web-fetch.js';
+import { webSearchTool } from './web-search.js';
 
 export const allTools: Tool[] = [
-  readFileTool, listDirTool, searchTool, writeFileTool, editFileTool, multiEditTool, runShellTool, gitTool, askUserTool, webFetchTool,
+  readFileTool, listDirTool, searchTool, writeFileTool, editFileTool, multiEditTool, runShellTool, gitTool, askUserTool, webFetchTool, webSearchTool,
 ];
 
 export function buildRegistry(): ToolRegistry {
