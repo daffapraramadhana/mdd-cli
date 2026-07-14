@@ -14,9 +14,11 @@ import type { ContentBlock } from './types.js';
 import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
 import { webCtxFromConfig } from './tools/web-search.js';
+import type { PlanDecision } from './tools/types.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
-import { buildSystemPrompt } from './system-prompt.js';
+import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
+import { nextMode, modeLabel, type Mode } from './modes.js';
 import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
 import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
@@ -146,8 +148,8 @@ function gitBranch(cwd: string): string | undefined {
   } catch { return undefined; }
 }
 
-function sessionMeta(providerName: string, model: string, cwd: string, autoApprove: boolean, branch?: string): SessionMeta {
-  return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove, branch };
+function sessionMeta(providerName: string, model: string, cwd: string, autoApprove: boolean, mode: Mode, branch?: string): SessionMeta {
+  return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove, mode, branch };
 }
 
 /** Per-turn streaming callbacks: splits <think> reasoning from answer text, tracks tools, flush at end. */
@@ -175,7 +177,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const cwd = process.cwd();
   const store = new UiStore();
   store.setTheme(config.theme ?? DEFAULT_THEME);
-  store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, gitBranch(cwd)));
+  store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, 'normal', gitBranch(cwd)));
   const gate = createGate({ confirm: store.requestChoice, autoApprove: opts.yes });
   const app = mountApp(store, () => {});
   store.addUser(prompt);
@@ -186,6 +188,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
     await runTurn(messages, {
       provider, registry: buildRegistry(), gate, cwd, model,
       systemPrompt: buildSystemPrompt(cwd),
+      toolFilter: (name) => name !== 'present_plan',
       onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
       ask: store.requestAsk,
       web: webCtxFromConfig(config),
@@ -209,6 +212,7 @@ export const HELP = [
   '  /provider <name>   switch provider: anthropic | openai',
   `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
+  '  shift+tab          cycle mode: normal · auto-accept edits · plan',
   '  /exit              quit (or press Ctrl-C)',
 ].join('\n');
 
@@ -218,6 +222,7 @@ export interface ReplSession {
   model: string;
   provider: LLMProvider;
   theme: string;
+  mode: Mode;
 }
 
 export interface CommandDeps {
@@ -297,9 +302,8 @@ async function repl(opts: RunOpts): Promise<void> {
   const cwd = process.cwd();
   const branch = gitBranch(cwd);
   const store = new UiStore();
-  const gate = createGate({ confirm: store.requestChoice, autoApprove: opts.yes });
   const registry = buildRegistry();
-  const systemPrompt = buildSystemPrompt(cwd);
+  const baseSystemPrompt = buildSystemPrompt(cwd);
   const messages: Message[] = [];
   let running = false;
 
@@ -312,12 +316,41 @@ async function repl(opts: RunOpts): Promise<void> {
     model: resolveModel(providerName, config, opts.model),
     provider: getProvider(providerName, effectiveConfig),
     theme: themeName,
+    mode: 'normal',
   };
 
+  const gate = createGate({ confirm: store.requestChoice, autoApprove: opts.yes, getMode: () => session.mode });
+
   const refreshMeta = (): void => {
-    store.setMeta(sessionMeta(session.providerName, session.model, cwd, !!opts.yes, branch));
+    store.setMeta(sessionMeta(session.providerName, session.model, cwd, !!opts.yes, session.mode, branch));
   };
   refreshMeta();
+
+  const cycleMode = (): void => {
+    session.mode = nextMode(session.mode);
+    refreshMeta();
+    store.addSystem(`→ ${modeLabel(session.mode)} mode`);
+  };
+
+  // Drives the present_plan approval prompt. On approval, flip to normal so the same turn
+  // continues under normal-mode gating; otherwise return the user's feedback to the agent.
+  const presentPlan = async (plan: string): Promise<PlanDecision> => {
+    const result = await store.requestChoice({
+      title: 'Approve this plan?',
+      body: plan.split('\n'),
+      options: [
+        { label: '✅ yes, run it', value: 'yes' },
+        { label: '✍ no — keep planning', value: 'no', opensInput: true, inputPlaceholder: 'what should change?' },
+      ],
+    });
+    if (result?.value === 'yes') {
+      session.mode = 'normal';
+      refreshMeta();
+      store.addSystem('→ plan approved · normal mode');
+      return { approved: true };
+    }
+    return { approved: false, ...(result?.text ? { feedback: result.text } : {}) };
+  };
 
   // Non-blocking: if a newer version is on npm, nudge in the status bar. Throttled to once a
   // day via a cache file and silent on any failure (offline/timeout) — never blocks startup.
@@ -402,10 +435,13 @@ async function repl(opts: RunOpts): Promise<void> {
     const h = streamHandlers(store);
     try {
       await runTurn(messages, {
-        provider: session.provider, registry, gate, cwd, model: session.model, systemPrompt,
+        provider: session.provider, registry, gate, cwd, model: session.model,
+        systemPrompt: effectiveSystemPrompt(baseSystemPrompt, session.mode),
+        toolFilter: (name) => name !== 'present_plan' || session.mode === 'plan',
         onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
         signal: controller.signal,
         ask: store.requestAsk,
+        presentPlan,
         web: webCtxFromConfig(effectiveConfig),
       });
       h.flush();
@@ -457,7 +493,7 @@ async function repl(opts: RunOpts): Promise<void> {
 
   // Interactive REPL in the normal terminal buffer: native smooth scroll, banner at the top
   // of scrollback, status pinned at the bottom. History persists in scrollback after exit.
-  app = mountApp(store, (input) => { void onSubmit(input); }, { showHeader: true });
+  app = mountApp(store, (input) => { void onSubmit(input); }, { showHeader: true, onCycleMode: cycleMode });
   await app.waitUntilExit();
 }
 

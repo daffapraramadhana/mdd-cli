@@ -2,6 +2,7 @@ import type { LLMProvider } from '../providers/index.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { PermissionGate } from '../permissions/index.js';
 import type { Message, ContentBlock, ToolUseBlock } from '../types.js';
+import type { PlanDecision } from '../tools/types.js';
 
 const MAX_ROUNDS = 50;
 
@@ -19,6 +20,8 @@ export interface AgentDeps {
   signal?: AbortSignal;
   ask?: (question: string, options?: string[]) => Promise<string>;
   web?: { searchEndpoint?: string; apiKey?: string };
+  toolFilter?: (name: string) => boolean;
+  presentPlan?: (plan: string) => Promise<PlanDecision>;
 }
 
 export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Message[]> {
@@ -28,7 +31,7 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
     let text = '';
     let stop: 'end' | 'tool_use' | 'max_tokens' = 'end';
 
-    for await (const ev of deps.provider.stream(messages, deps.registry.schemas(), {
+    for await (const ev of deps.provider.stream(messages, deps.registry.schemas(deps.toolFilter), {
       model: deps.model, systemPrompt: deps.systemPrompt, maxTokens: 8192, signal: deps.signal,
     })) {
       if (ev.type === 'text') { text += ev.text; deps.onText?.(ev.text); }
@@ -62,7 +65,7 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
         continue;
       }
       try {
-        const r = await tool.handler(use.input, { cwd: deps.cwd, ask: deps.ask, web: deps.web });
+        const r = await tool.handler(use.input, { cwd: deps.cwd, ask: deps.ask, web: deps.web, presentPlan: deps.presentPlan });
         results.push({ type: 'tool_result', toolUseId: use.id, content: r.content, isError: r.isError });
         deps.onToolEnd?.(r.isError, r.content);
       } catch (err) {

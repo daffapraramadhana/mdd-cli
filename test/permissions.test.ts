@@ -3,6 +3,7 @@ import { createGate } from '../src/permissions/index.js';
 import type { Tool } from '../src/tools/types.js';
 import { z } from 'zod';
 import type { ChoiceResult } from '../src/ui/select.js';
+import { EDIT_TOOLS } from '../src/modes.js';
 
 const tool = (over: Partial<Tool> = {}): Tool => ({
   name: 'git', description: '', inputSchema: z.object({}), mutating: true,
@@ -70,5 +71,46 @@ describe('createGate', () => {
     expect(await gate.check(tool(), {})).toEqual({ allow: true });
     expect(await gate.check(tool(), {})).toEqual({ allow: true });
     expect(asked).toBe(2); // asked both times — not cached like 'always'
+  });
+});
+
+describe('createGate — modes', () => {
+  it('plan mode denies every mutating tool without confirming', async () => {
+    let asked = 0;
+    const gate = createGate({ confirm: async () => { asked++; return { value: 'yes' }; }, getMode: () => 'plan' });
+    const d = await gate.check(tool({ name: 'write_file' }), {});
+    expect(d.allow).toBe(false);
+    expect(d.reason).toMatch(/plan mode/i);
+    expect(asked).toBe(0);
+  });
+
+  it('plan mode still allows non-mutating tools (e.g. present_plan)', async () => {
+    const gate = createGate({ confirm: async () => ({ value: 'yes' }), getMode: () => 'plan' });
+    expect(await gate.check(tool({ name: 'present_plan', mutating: false }), {})).toEqual({ allow: true });
+  });
+
+  it('auto-edit mode auto-approves file edits but confirms shell/git', async () => {
+    let asked = 0;
+    const gate = createGate({ confirm: async () => { asked++; return { value: 'yes' }; }, getMode: () => 'auto-edit' });
+    for (const name of EDIT_TOOLS) {
+      expect(await gate.check(tool({ name }), {})).toEqual({ allow: true });
+    }
+    expect(asked).toBe(0);
+    expect(await gate.check(tool({ name: 'run_shell' }), { command: 'ls' })).toEqual({ allow: true });
+    expect(await gate.check(tool({ name: 'git' }), { args: 'status' })).toEqual({ allow: true });
+    expect(asked).toBe(2); // shell + git each confirmed once
+  });
+
+  it('normal mode confirms mutating tools (unchanged behavior)', async () => {
+    let asked = 0;
+    const gate = createGate({ confirm: async () => { asked++; return { value: 'yes' }; }, getMode: () => 'normal' });
+    expect(await gate.check(tool({ name: 'edit_file' }), {})).toEqual({ allow: true });
+    expect(asked).toBe(1);
+  });
+
+  it('plan mode takes precedence over --yes autoApprove', async () => {
+    const gate = createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true, getMode: () => 'plan' });
+    const d = await gate.check(tool({ name: 'run_shell' }), { command: 'rm -rf x' });
+    expect(d.allow).toBe(false);
   });
 });

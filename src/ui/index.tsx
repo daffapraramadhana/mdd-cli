@@ -21,10 +21,10 @@ const CLEAR_ALL = '\x1b[2J\x1b[3J\x1b[H';
 export function mountApp(
   store: UiStore,
   onSubmit: (input: SubmitInput) => void,
-  opts: { showHeader?: boolean } = {},
+  opts: { showHeader?: boolean; onCycleMode?: () => void } = {},
 ): { unmount(): void; waitUntilExit(): Promise<void> } {
   if (opts.showHeader) process.stdout.write(CLEAR_ALL);
-  const instance = render(<App store={store} onSubmit={onSubmit} showHeader={opts.showHeader} />);
+  const instance = render(<App store={store} onSubmit={onSubmit} showHeader={opts.showHeader} onCycleMode={opts.onCycleMode} />);
   return {
     unmount: instance.unmount,
     waitUntilExit: () => instance.waitUntilExit().then(() => undefined),

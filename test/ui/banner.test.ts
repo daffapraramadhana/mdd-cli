@@ -50,3 +50,19 @@ describe('formatPath', () => {
     expect(formatPath({ provider: 'openai', model: 'x', cwd: '~/proj', branch: 'main' })).toBe('~/proj (main)');
   });
 });
+
+const base = { provider: 'openai', model: 'gpt-x', cwd: '~/p' };
+
+describe('formatStatus — mode', () => {
+  it('omits the mode label in normal mode', () => {
+    expect(formatStatus({ ...base, mode: 'normal' })).toBe('openai · gpt-x');
+  });
+
+  it('shows plan mode', () => {
+    expect(formatStatus({ ...base, mode: 'plan' })).toContain('plan');
+  });
+
+  it('shows auto-accept edits mode', () => {
+    expect(formatStatus({ ...base, mode: 'auto-edit' })).toContain('auto-accept edits');
+  });
+});
