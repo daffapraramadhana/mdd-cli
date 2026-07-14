@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { buildSystemPrompt, effectiveSystemPrompt } from '../src/system-prompt.js';
+import type { Skill } from '../src/skills/index.js';
+
+const demoSkills: Skill[] = [
+  { name: 'deploy', description: 'ship it', body: 'body', source: 'project', path: '' },
+];
 
 describe('buildSystemPrompt', () => {
   it('names the assistant and includes the working directory', () => {
@@ -26,5 +31,22 @@ describe('effectiveSystemPrompt', () => {
     expect(out.startsWith('BASE')).toBe(true);
     expect(out).toMatch(/present_plan/);
     expect(out).toMatch(/plan mode/i);
+  });
+
+  it('leaves the base unchanged when there are no skills', () => {
+    expect(effectiveSystemPrompt('BASE', 'normal', [])).toBe('BASE');
+  });
+
+  it('advertises available skills when provided', () => {
+    const out = effectiveSystemPrompt('BASE', 'normal', demoSkills);
+    expect(out.startsWith('BASE')).toBe(true);
+    expect(out).toContain('deploy');
+    expect(out).toMatch(/use_skill/);
+  });
+
+  it('includes both skills and the plan addendum in plan mode', () => {
+    const out = effectiveSystemPrompt('BASE', 'plan', demoSkills);
+    expect(out).toContain('deploy');
+    expect(out).toMatch(/present_plan/);
   });
 });

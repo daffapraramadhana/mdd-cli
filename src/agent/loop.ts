@@ -3,6 +3,7 @@ import type { ToolRegistry } from '../tools/registry.js';
 import type { PermissionGate } from '../permissions/index.js';
 import type { Message, ContentBlock, ToolUseBlock } from '../types.js';
 import type { PlanDecision } from '../tools/types.js';
+import type { Skill } from '../skills/index.js';
 
 const MAX_ROUNDS = 50;
 
@@ -22,6 +23,7 @@ export interface AgentDeps {
   web?: { searchEndpoint?: string; apiKey?: string };
   toolFilter?: (name: string) => boolean;
   presentPlan?: (plan: string) => Promise<PlanDecision>;
+  skills?: Skill[];
 }
 
 export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Message[]> {
@@ -65,7 +67,7 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
         continue;
       }
       try {
-        const r = await tool.handler(use.input, { cwd: deps.cwd, ask: deps.ask, web: deps.web, presentPlan: deps.presentPlan });
+        const r = await tool.handler(use.input, { cwd: deps.cwd, ask: deps.ask, web: deps.web, presentPlan: deps.presentPlan, skills: deps.skills });
         results.push({ type: 'tool_result', toolUseId: use.id, content: r.content, isError: r.isError });
         deps.onToolEnd?.(r.isError, r.content);
       } catch (err) {

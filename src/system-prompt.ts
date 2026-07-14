@@ -1,5 +1,6 @@
 import { platform } from 'node:os';
 import type { Mode } from './modes.js';
+import { skillsPromptSection, type Skill } from './skills/index.js';
 
 export function buildSystemPrompt(cwd: string): string {
   return [
@@ -26,7 +27,14 @@ const PLAN_ADDENDUM = [
   '- If the user approves, the session switches to normal mode and you execute the plan.',
 ].join('\n');
 
-/** Compose the per-turn system prompt: base text, plus a plan-mode addendum when in plan mode. */
-export function effectiveSystemPrompt(base: string, mode: Mode): string {
-  return mode === 'plan' ? base + '\n' + PLAN_ADDENDUM : base;
+/**
+ * Compose the per-turn system prompt: base text, plus an optional advertised list of
+ * available skills, plus a plan-mode addendum when in plan mode.
+ */
+export function effectiveSystemPrompt(base: string, mode: Mode, skills: Skill[] = []): string {
+  let prompt = base;
+  const section = skillsPromptSection(skills);
+  if (section) prompt += '\n' + section;
+  if (mode === 'plan') prompt += '\n' + PLAN_ADDENDUM;
+  return prompt;
 }

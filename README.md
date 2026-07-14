@@ -10,6 +10,7 @@ runs shell/git, and streams its work in a polished terminal UI — multi-provide
 **Features**
 
 - 🤖 Agentic loop — reads, searches, edits files and runs shell & git to complete tasks
+- 🧩 Skills — reusable `SKILL.md` instruction bundles the agent loads on demand
 - 🔌 Multi-provider — Anthropic, OpenAI, or any OpenAI-compatible endpoint (9router)
 - 📊 Live token + estimated-cost meter in the status bar
 - 🖥️ Fullscreen TUI — gradient header, live tool status & timing, markdown replies, themes
@@ -99,6 +100,38 @@ mdd --provider openai \
 
 ---
 
+## Skills
+
+Skills are small, reusable bundles of instructions the agent can load on demand.
+Each skill is a folder with a `SKILL.md` file; the agent sees a short list of
+available skills in its system prompt and pulls a skill's full instructions into
+context (via the `use_skill` tool) only when a task matches.
+
+Skills are discovered from two places:
+
+- **Project skills:** `<repo>/.mdd/skills/<name>/SKILL.md` — checked into the repo,
+  shared with your team.
+- **Personal skills:** `~/.config/mdd/skills/<name>/SKILL.md` — just for you.
+
+A project skill overrides a personal skill with the same name.
+
+A minimal `SKILL.md`:
+
+```markdown
+---
+name: deploy
+description: How to release the app to staging
+---
+
+1. Run `npm run build`.
+2. Push the image with `./scripts/deploy.sh staging`.
+3. Verify the health check at https://staging.example.com/healthz.
+```
+
+The frontmatter (`name`, `description`) is optional — with no frontmatter, the
+folder name becomes the skill name and the whole file is the instruction body.
+Skills are read-only and load without a confirmation prompt.
+
 ## Config
 
 Stored at `~/.config/mdd/config.json` (mode `0600`). Re-run setup any time with
@@ -107,4 +140,5 @@ Stored at `~/.config/mdd/config.json` (mode `0600`). Re-run setup any time with
 
 ## Roadmap
 
-GitLab and Odoo tools (read-only first), token/cost meter, central secrets.
+GitLab and Odoo tools (read-only first), central secrets, richer skills
+(bundled scripts/resources, a `/skills` command).

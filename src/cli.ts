@@ -18,7 +18,8 @@ import type { PlanDecision } from './tools/types.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
-import { nextMode, modeLabel, type Mode } from './modes.js';
+import { loadSkills } from './skills/index.js';
+import { nextMode, type Mode } from './modes.js';
 import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
 import { getTheme, gradientText, THEME_NAMES, DEFAULT_THEME } from './ui/theme.js';
@@ -175,6 +176,7 @@ export function streamHandlers(store: UiStore) {
 async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const { provider, model, config } = await resolveSetup(opts);
   const cwd = process.cwd();
+  const skills = await loadSkills(cwd);
   const store = new UiStore();
   store.setTheme(config.theme ?? DEFAULT_THEME);
   store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, 'normal', gitBranch(cwd)));
@@ -187,11 +189,12 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   try {
     await runTurn(messages, {
       provider, registry: buildRegistry(), gate, cwd, model,
-      systemPrompt: buildSystemPrompt(cwd),
+      systemPrompt: effectiveSystemPrompt(buildSystemPrompt(cwd), 'normal', skills),
       toolFilter: (name) => name !== 'present_plan',
       onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
       ask: store.requestAsk,
       web: webCtxFromConfig(config),
+      skills,
     });
     h.flush();
   } catch (err) {
@@ -301,6 +304,7 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const cwd = process.cwd();
   const branch = gitBranch(cwd);
+  const skills = await loadSkills(cwd);
   const store = new UiStore();
   const registry = buildRegistry();
   const baseSystemPrompt = buildSystemPrompt(cwd);
@@ -328,8 +332,10 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const cycleMode = (): void => {
     session.mode = nextMode(session.mode);
+    // Mode lives in the bottom status bar (refreshMeta → formatStatus), so a
+    // manual shift+tab cycle updates that in place instead of appending a line
+    // to the conversation on every toggle.
     refreshMeta();
-    store.addSystem(`→ ${modeLabel(session.mode)} mode`);
   };
 
   // Drives the present_plan approval prompt. On approval, flip to normal so the same turn
@@ -436,13 +442,14 @@ async function repl(opts: RunOpts): Promise<void> {
     try {
       await runTurn(messages, {
         provider: session.provider, registry, gate, cwd, model: session.model,
-        systemPrompt: effectiveSystemPrompt(baseSystemPrompt, session.mode),
+        systemPrompt: effectiveSystemPrompt(baseSystemPrompt, session.mode, skills),
         toolFilter: (name) => name !== 'present_plan' || session.mode === 'plan',
         onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
         signal: controller.signal,
         ask: store.requestAsk,
         presentPlan,
         web: webCtxFromConfig(effectiveConfig),
+        skills,
       });
       h.flush();
     } catch (err) {
