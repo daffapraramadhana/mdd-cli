@@ -18,6 +18,7 @@ function setup(config: Partial<Config> = {}, initial: Partial<ReplSession> = {})
     model: 'claude-opus-4-8',
     provider: fakeProvider('anthropic'),
     theme: 'neon',
+    mode: 'normal',
     ...initial,
   };
   const fullConfig: Config = { defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-8', ...config };
