@@ -5,7 +5,7 @@ All notable changes to `mdd-cli` are documented here. This project follows
 
 ## [Unreleased]
 
-## [Unreleased]
+## [0.5.0] - 2026-07-14
 
 ### Added
 - **Skills** — reusable instruction bundles the agent loads on demand. A skill is a folder with a `SKILL.md` (optional `name`/`description` frontmatter plus a markdown body), discovered from `<repo>/.mdd/skills/` (project, checked in) and `~/.config/mdd/skills/` (personal); project skills override personal ones of the same name. The agent sees a compact list of available skills in its system prompt and pulls a skill's full instructions into context with the new read-only `use_skill` tool (no confirmation prompt). Skills work in both the interactive REPL and one-shot mode.
