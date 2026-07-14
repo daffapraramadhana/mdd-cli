@@ -9,8 +9,6 @@ export interface KnownModel {
 }
 
 export const KNOWN_MODELS: KnownModel[] = [
-  { provider: 'anthropic', id: 'claude-opus-4-8', note: 'native Anthropic (default)' },
-  { provider: 'openai', id: 'gpt-5', note: 'native OpenAI (default)' },
   { provider: 'openai', id: 'cc/claude-fable-5', note: '9router' },
   { provider: 'openai', id: 'cc/claude-sonnet-5', note: '9router' },
   { provider: 'openai', id: 'cc/claude-opus-4-8', note: '9router' },
