@@ -14,6 +14,7 @@ import type { ContentBlock } from './types.js';
 import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
 import { webCtxFromConfig } from './tools/web-search.js';
+import type { PlanDecision } from './tools/types.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
@@ -187,6 +188,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
     await runTurn(messages, {
       provider, registry: buildRegistry(), gate, cwd, model,
       systemPrompt: buildSystemPrompt(cwd),
+      toolFilter: (name) => name !== 'present_plan',
       onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
       ask: store.requestAsk,
       web: webCtxFromConfig(config),
@@ -332,7 +334,7 @@ async function repl(opts: RunOpts): Promise<void> {
 
   // Drives the present_plan approval prompt. On approval, flip to normal so the same turn
   // continues under normal-mode gating; otherwise return the user's feedback to the agent.
-  const presentPlan = async (plan: string): Promise<{ approved: true } | { approved: false; feedback?: string }> => {
+  const presentPlan = async (plan: string): Promise<PlanDecision> => {
     const result = await store.requestChoice({
       title: 'Approve this plan?',
       body: plan.split('\n'),

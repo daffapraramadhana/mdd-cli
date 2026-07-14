@@ -62,9 +62,12 @@ more restrictive posture.
 
 **Known limitation (accepted for v1):** the `git` tool is marked `mutating: true`
 wholesale, so read-only subcommands (`git status`, `git diff`, `git log`) are also blocked
-in Plan mode. The agent can still research via `read_file`, `list_dir`, and `search`. If
-this proves limiting, a follow-up can special-case read-only git subcommands; out of scope
-here.
+in Plan mode. `web_search` and `web_fetch` are likewise marked `mutating: true` and are
+therefore also blocked in Plan mode — plan mode blocks *all* mutating tools, not just
+`git`. The agent can still research via `read_file`, `list_dir`, and `search`. If this
+proves limiting, a follow-up can special-case read-only git subcommands, or allow the web
+tools in Plan mode for research (they already carry their own confirmation prompt); out of
+scope here.
 
 ### 3. `present_plan` tool + approval flow
 
