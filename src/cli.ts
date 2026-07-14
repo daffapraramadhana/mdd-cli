@@ -23,6 +23,7 @@ import { LOGO } from './ui/banner.js';
 import { onboardChoice, buildOnboardPatch, type OnboardChoice } from './onboard.js';
 import { formatModels, KNOWN_MODELS } from './models.js';
 import { VERSION } from './version.js';
+import { checkForUpdate } from './update.js';
 import type { Message } from './types.js';
 
 // Small ANSI helpers for the pre-TUI onboarding output.
@@ -315,6 +316,10 @@ async function repl(opts: RunOpts): Promise<void> {
     store.setMeta(sessionMeta(session.providerName, session.model, cwd, !!opts.yes, branch));
   };
   refreshMeta();
+
+  // Non-blocking: if a newer version is on npm, nudge in the status bar. Throttled to once a
+  // day via a cache file and silent on any failure (offline/timeout) — never blocks startup.
+  void checkForUpdate(VERSION).then((u) => { if (u?.stale) store.setUpdate(u); }).catch(() => {});
 
   // Session persistence: one record per REPL conversation, saved after each completed turn.
   const sessions = new SessionStore(join(configDir(), 'sessions'));

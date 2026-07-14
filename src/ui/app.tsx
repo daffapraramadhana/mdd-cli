@@ -281,6 +281,11 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
         )}
         {/* Command hints on their own dim line, indented to align with the input. */}
         <Box paddingX={1}><Text dimColor>{HINTS}</Text></Box>
+        {state.update?.stale ? (
+          <Box paddingX={1}>
+            <Text color={theme.accent}>{`↑ update available: v${state.update.latest} · npm i -g mdd-cli`}</Text>
+          </Box>
+        ) : null}
       </Box>
     );
   }

@@ -1,5 +1,6 @@
 import { summarizePreview } from './format.js';
 import type { SessionMeta } from './banner.js';
+import type { UpdateInfo } from '../update.js';
 import type { PromptSpec, ChoiceOption, ChoiceResult } from './select.js';
 
 // Split a live streaming markdown buffer into a prefix that is safe to flush into scrollback
@@ -41,12 +42,14 @@ export interface UiState {
   pendingChoice: PromptSpec | null;
   usage: { inputTokens: number; outputTokens: number };
   turnStartedAt: number | null;
+  update: UpdateInfo | null;
 }
 
 export class UiStore {
   private state: UiState = {
     transcript: [], streaming: '', reasoning: '', reasoningStartedAt: null, status: 'idle', pendingPrompt: null, meta: null, activeTool: null,
     themeName: 'neon', pendingChoice: null, usage: { inputTokens: 0, outputTokens: 0 }, turnStartedAt: null,
+    update: null,
   };
   private listeners = new Set<() => void>();
   private resolver: ((answer: string) => void) | null = null;
@@ -135,6 +138,8 @@ export class UiStore {
   };
 
   setTheme = (themeName: string): void => { this.set({ themeName }); };
+
+  setUpdate = (update: UpdateInfo): void => { this.set({ update }); };
 
   addUsage = (inputTokens: number, outputTokens: number): void => {
     this.set({

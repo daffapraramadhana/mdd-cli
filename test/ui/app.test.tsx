@@ -108,6 +108,24 @@ describe('App', () => {
     expect((frame.match(/MDD/g) ?? []).length).toBe(1); // label not repeated on the continuation
   });
 
+  it('shows an update-available nudge in the status bar when a newer version is on npm', () => {
+    const store = new UiStore();
+    store.setMeta({ provider: 'openai', model: 'm', cwd: '~/p', autoApprove: false });
+    store.setUpdate({ latest: '0.4.0', current: '0.3.0', stale: true });
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('update available: v0.4.0');
+    expect(frame).toContain('npm i -g mdd-cli');
+  });
+
+  it('shows no update nudge when the version is current', () => {
+    const store = new UiStore();
+    store.setMeta({ provider: 'openai', model: 'm', cwd: '~/p', autoApprove: false });
+    store.setUpdate({ latest: '0.3.0', current: '0.3.0', stale: false });
+    const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
+    expect(lastFrame() ?? '').not.toContain('update available');
+  });
+
   it('renders the status + path footer from the store meta', () => {
     const store = new UiStore();
     store.setMeta({ provider: 'openai', model: 'cc/claude-opus-4-8', cwd: '~/proj', branch: 'main', autoApprove: true });
@@ -285,9 +303,9 @@ describe('App', () => {
     store.appendReasoning('weighing the options');
     const { lastFrame } = render(<App store={store} onSubmit={() => {}} />);
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('✻ Thinking'); // the reasoning block shows
+    expect(frame).toContain('Thinking'); // the reasoning block shows (spinner char varies by tick)
     // the pre-existing lowercase 'thinking' placeholder must NOT also show
-    const plain = frame.split('\n').filter((l) => /(^|\s)thinking(\.|\s|$)/.test(l) && !l.includes('✻'));
+    const plain = frame.split('\n').filter((l) => /(^|\s)thinking(\.|\s|$)/.test(l) && !l.includes('Thinking'));
     expect(plain).toEqual([]);
   });
 
