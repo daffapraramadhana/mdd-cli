@@ -13,6 +13,7 @@ import { attachImages } from './ui/attach.js';
 import type { ContentBlock } from './types.js';
 import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
+import { webCtxFromConfig } from './tools/web-search.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt } from './system-prompt.js';
@@ -80,7 +81,7 @@ async function resolveSetup(opts: RunOpts) {
   // Precedence for the OpenAI base URL: --base-url flag > config (file or OPENAI_BASE_URL env) > SDK default.
   const effectiveConfig = opts.baseUrl ? { ...config, openaiBaseUrl: opts.baseUrl } : config;
   const provider = getProvider(providerName, effectiveConfig);
-  return { provider, model, config };
+  return { provider, model, config: effectiveConfig };
 }
 
 export function hasKeyFor(config: Config, name: 'anthropic' | 'openai'): boolean {
@@ -187,6 +188,7 @@ async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
       systemPrompt: buildSystemPrompt(cwd),
       onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
       ask: store.requestAsk,
+      web: webCtxFromConfig(config),
     });
     h.flush();
   } catch (err) {
@@ -404,6 +406,7 @@ async function repl(opts: RunOpts): Promise<void> {
         onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
         signal: controller.signal,
         ask: store.requestAsk,
+        web: webCtxFromConfig(effectiveConfig),
       });
       h.flush();
     } catch (err) {

@@ -8,4 +8,9 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('/tmp/project');
     expect(p.toLowerCase()).toContain('coding assistant');
   });
+
+  it('mentions the web tools', () => {
+    const p = buildSystemPrompt('/repo');
+    expect(p).toMatch(/web_search|web_fetch/);
+  });
 });

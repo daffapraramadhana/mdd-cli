@@ -18,6 +18,7 @@ export interface AgentDeps {
   onUsage?: (inputTokens: number, outputTokens: number) => void;
   signal?: AbortSignal;
   ask?: (question: string, options?: string[]) => Promise<string>;
+  web?: { searchEndpoint?: string; apiKey?: string };
 }
 
 export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Message[]> {
@@ -61,7 +62,7 @@ export async function runTurn(messages: Message[], deps: AgentDeps): Promise<Mes
         continue;
       }
       try {
-        const r = await tool.handler(use.input, { cwd: deps.cwd, ask: deps.ask });
+        const r = await tool.handler(use.input, { cwd: deps.cwd, ask: deps.ask, web: deps.web });
         results.push({ type: 'tool_result', toolUseId: use.id, content: r.content, isError: r.isError });
         deps.onToolEnd?.(r.isError, r.content);
       } catch (err) {
