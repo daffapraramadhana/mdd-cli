@@ -171,7 +171,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
       {state.reasoning ? (
         <Row label="MDD" color={theme.assistant}>
           <Box flexDirection="column">
-            <Text dimColor>{`✻ Thinking${thinkingDots(tick)}`}</Text>
+            <Text dimColor>{`${spinnerFrame(tick)} Thinking${thinkingDots(tick)}`}</Text>
             <Text dimColor italic>{state.reasoning.split('\n').slice(-8).join('\n')}</Text>
           </Box>
         </Row>
@@ -193,7 +193,7 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
       {thinking ? (
         <Row label="MDD" color={theme.assistant}>
           <Text dimColor>
-            {`thinking${thinkingDots(tick)}`}
+            {`${spinnerFrame(tick)} thinking${thinkingDots(tick)}`}
             {state.turnStartedAt !== null ? `   ${fmtElapsed(Date.now() - state.turnStartedAt)}` : ''}
             {'   esc to interrupt'}
           </Text>
