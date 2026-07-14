@@ -2,7 +2,7 @@
 // Pure logic behind the first-run onboarding wizard (the interactive I/O lives in cli.ts).
 import type { Config } from './config/index.js';
 
-export const NINEROUTER_URL = 'http://192.168.7.8:20128/v1';
+export const NINEROUTER_URL = 'https://ai-router.mdd.co.id/v1';
 
 export interface OnboardChoice {
   id: '9router' | 'anthropic' | 'openai';

@@ -8,7 +8,7 @@ describe('onboardChoice', () => {
     expect(c.defaultProvider).toBe('openai');
     expect(c.defaultModel).toBe('cc/claude-sonnet-5');
     expect(c.defaultBaseUrl).toBe(NINEROUTER_URL);
-    expect(NINEROUTER_URL).toBe('http://192.168.7.8:20128/v1');
+    expect(NINEROUTER_URL).toBe('https://ai-router.mdd.co.id/v1');
     expect(c.askBaseUrl).toBe(false); // hardcoded — no endpoint step
   });
   it('maps anthropic (option 2) with no base-url step', () => {
