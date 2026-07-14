@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { ToolRegistry, truncate } from '../../src/tools/registry.js';
+import { buildRegistry } from '../../src/tools/index.js';
 import type { Tool } from '../../src/tools/types.js';
 
 const dummy: Tool = {
@@ -26,6 +27,20 @@ describe('ToolRegistry', () => {
     const [schema] = r.schemas();
     expect(schema.name).toBe('echo');
     expect(schema.inputSchema).toMatchObject({ type: 'object', properties: { text: { type: 'string' } } });
+  });
+});
+
+describe('ToolRegistry.schemas filter', () => {
+  it('includes all tools when no filter is given', () => {
+    const names = buildRegistry().schemas().map((s) => s.name);
+    expect(names).toContain('present_plan');
+    expect(names).toContain('read_file');
+  });
+
+  it('omits tools rejected by the filter', () => {
+    const names = buildRegistry().schemas((n) => n !== 'present_plan').map((s) => s.name);
+    expect(names).not.toContain('present_plan');
+    expect(names).toContain('read_file');
   });
 });
 

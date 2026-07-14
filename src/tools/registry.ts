@@ -11,11 +11,13 @@ export class ToolRegistry {
   register(t: Tool): void { this.tools.set(t.name, t); }
   get(name: string): Tool | undefined { return this.tools.get(name); }
   list(): Tool[] { return [...this.tools.values()]; }
-  schemas(): ToolSchema[] {
-    return this.list().map((t) => ({
-      name: t.name,
-      description: t.description,
-      inputSchema: z.toJSONSchema(t.inputSchema) as Record<string, unknown>,
-    }));
+  schemas(filter?: (name: string) => boolean): ToolSchema[] {
+    return this.list()
+      .filter((t) => (filter ? filter(t.name) : true))
+      .map((t) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: z.toJSONSchema(t.inputSchema) as Record<string, unknown>,
+      }));
   }
 }
