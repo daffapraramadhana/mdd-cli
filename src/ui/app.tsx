@@ -19,7 +19,7 @@ import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const GUTTER = 5;
-const HINTS = '/model  /resume  /theme  /help  /exit';
+const HINTS = '/model  /resume  /theme  /help    shift+tab cycle mode';
 const fmtElapsed = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {
@@ -101,7 +101,7 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
 // top of scrollback (like Claude Code) instead of being frozen in an alternate screen.
 export interface SubmitInput { display: string; text: string; imagePaths: string[] }
 
-export function App({ store, onSubmit, showHeader = false }: { store: UiStore; onSubmit: (input: SubmitInput) => void; showHeader?: boolean }) {
+export function App({ store, onSubmit, showHeader = false, onCycleMode }: { store: UiStore; onSubmit: (input: SubmitInput) => void; showHeader?: boolean; onCycleMode?: () => void }) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
   const [tick, setTick] = useState(0);
@@ -127,6 +127,10 @@ export function App({ store, onSubmit, showHeader = false }: { store: UiStore; o
 
   // Esc interrupts an in-flight turn — but only when nothing else owns Esc (no select/prompt open).
   useInput((_input, key) => {
+    if (key.tab && key.shift && state.pendingChoice === null && state.pendingPrompt === null) {
+      onCycleMode?.();
+      return;
+    }
     if (key.escape && state.status === 'busy' && state.pendingChoice === null && state.pendingPrompt === null) {
       store.requestAbort();
     }
