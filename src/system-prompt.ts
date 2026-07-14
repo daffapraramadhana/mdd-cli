@@ -11,6 +11,7 @@ export function buildSystemPrompt(cwd: string): string {
     '- Briefly explain what you are about to do before mutating files or running shell commands.',
     '- Use the provided tools; do not fabricate file contents or command output.',
     '- When you need a decision only the user can make, call the ask_user tool instead of guessing.',
+    '- To consult external docs or current information, use web_search and web_fetch (they ask for confirmation before running).',
     '- When the task is complete, stop and summarize what you did.',
   ].join('\n');
 }

@@ -6,7 +6,7 @@ describe('buildRegistry', () => {
     const r = buildRegistry();
     const names = r.list().map((t) => t.name).sort();
     expect(names).toEqual([
-      'ask_user', 'edit_file', 'git', 'list_dir', 'multi_edit', 'read_file', 'run_shell', 'search', 'write_file',
+      'ask_user', 'edit_file', 'git', 'list_dir', 'multi_edit', 'read_file', 'run_shell', 'search', 'web_fetch', 'web_search', 'write_file',
     ]);
   });
 });
