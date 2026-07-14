@@ -3,6 +3,8 @@
 All notable changes to `mdd-cli` are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
 ## [0.4.0] - 2026-07-14
 
 The agent can now reach the web, and you can switch its permission posture on the fly.
