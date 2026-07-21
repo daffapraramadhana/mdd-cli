@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { contextLimit, shouldCompact, DEFAULT_CONTEXT_LIMIT, splitForCompaction, summaryInput, SUMMARY_INSTRUCTION } from '../../src/agent/compact.js';
+import { contextLimit, shouldCompact, DEFAULT_CONTEXT_LIMIT, splitForCompaction, summaryInput, SUMMARY_INSTRUCTION, buildCompacted, SUMMARY_ACK } from '../../src/agent/compact.js';
 import type { Message } from '../../src/types.js';
 
 describe('contextLimit', () => {
@@ -111,5 +111,26 @@ describe('summaryInput', () => {
     const block = out[0].content[0];
     if (block.type !== 'tool_result') throw new Error('expected tool_result');
     expect(block.content).toBe('short');
+  });
+});
+
+describe('buildCompacted', () => {
+  const tail: Message[] = [
+    { role: 'user', content: [{ type: 'text', text: 'prompt B' }] },
+    { role: 'assistant', content: [{ type: 'text', text: 'done B' }] },
+  ];
+
+  it('prepends the summary as a user message and a synthetic assistant ack', () => {
+    const out = buildCompacted('SUMMARY TEXT', tail);
+    expect(out[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'SUMMARY TEXT' }] });
+    expect(out[1]).toEqual({ role: 'assistant', content: [{ type: 'text', text: SUMMARY_ACK }] });
+    expect(out.slice(2)).toEqual(tail);
+  });
+
+  it('produces strictly alternating roles at the seam', () => {
+    const out = buildCompacted('S', tail);
+    for (let i = 1; i < out.length; i++) {
+      expect(out[i].role).not.toBe(out[i - 1].role);
+    }
   });
 });

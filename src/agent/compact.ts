@@ -71,3 +71,17 @@ export function summaryInput(head: Message[]): Message[] {
   }));
   return [...shrunk, { role: 'user', content: [{ type: 'text', text: SUMMARY_INSTRUCTION }] }];
 }
+
+export const SUMMARY_ACK =
+  'Understood. I have the summary of the earlier conversation above and will continue from here.';
+
+// Assemble the compacted history: the summary as a user message, a synthetic assistant
+// ack, then the verbatim tail. The ack guarantees valid role alternation no matter which
+// role the tail begins with.
+export function buildCompacted(summaryText: string, tail: Message[]): Message[] {
+  return [
+    { role: 'user', content: [{ type: 'text', text: summaryText }] },
+    { role: 'assistant', content: [{ type: 'text', text: SUMMARY_ACK }] },
+    ...tail,
+  ];
+}
