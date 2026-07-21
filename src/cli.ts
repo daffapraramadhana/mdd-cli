@@ -15,7 +15,9 @@ import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
 import { webCtxFromConfig } from './tools/web-search.js';
 import type { PlanDecision } from './tools/types.js';
-import { createGate } from './permissions/index.js';
+import { createGate, type PermissionGate } from './permissions/index.js';
+import { renderCommand, type Command as PluginCommand } from './plugins/commands.js';
+import { runPrefill } from './plugins/prefill.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
 import { loadSkills, type Skill } from './skills/index.js';
@@ -254,10 +256,14 @@ export interface CommandDeps {
   resumeSession: () => void;
   exit: () => void;
   compact: () => void;
+  commands?: Map<string, PluginCommand>;
+  runCommandLine?: (text: string) => void;
+  gate?: PermissionGate;
+  cwd?: string;
 }
 
 /** Execute a `/command` line, mutating `session` and reporting via the store. */
-export function handleReplCommand(input: string, session: ReplSession, deps: CommandDeps): void {
+export async function handleReplCommand(input: string, session: ReplSession, deps: CommandDeps): Promise<void> {
   const [cmd, ...rest] = input.slice(1).split(/\s+/);
   const arg = rest.join(' ').trim();
   switch (cmd) {
@@ -306,8 +312,18 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
     case 'quit':
       deps.exit();
       break;
-    default:
-      deps.store.addSystem(`unknown command: /${cmd} — try /help`);
+    default: {
+      const command = deps.commands?.get(cmd);
+      if (!command) { deps.store.addSystem(`unknown command: /${cmd} — try /help`); break; }
+      const rendered = renderCommand(command.body, arg);
+      if (rendered.prefill.length && deps.gate && deps.cwd !== undefined) {
+        const result = await runPrefill(rendered, { gate: deps.gate, cwd: deps.cwd });
+        for (const w of result.warnings) deps.store.addSystem(w);
+        deps.runCommandLine?.(result.text);
+      } else {
+        deps.runCommandLine?.(rendered.text);
+      }
+    }
   }
 }
 
@@ -505,34 +521,24 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  const onSubmit = async (input: SubmitInput): Promise<void> => {
-    if (running) return;
-    if (input.display.startsWith('/')) {
-      handleReplCommand(input.display, session, {
-        config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit,
-        compact: () => {
-          if (running) return;
-          running = true;
-          store.setStatus('busy');
-          void compactConversation(false).finally(() => { store.setStatus('idle'); running = false; });
-        },
-      });
-      return;
-    }
-    const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
-    for (const err of errors) store.addSystem(`⚠ ${err}`);
-    if (!input.text && !blocks.length) { return; } // every image failed and no text — nothing to send
+  // Set by onSubmit right before invoking submitUserTurn so image blocks ride along without
+  // widening submitUserTurn's signature (the plugin-command path never sets this, so it stays
+  // empty for command-triggered turns).
+  let pendingImageBlocks: ContentBlock[] = [];
+
+  const submitUserTurn = async (text: string, display: string): Promise<void> => {
     running = true;
-    store.addUser(input.display);
-    if (!title) title = truncateTitle(input.display);
+    store.addUser(display);
+    if (!title) title = truncateTitle(display);
     store.setStatus('busy');
     const controller = new AbortController();
     let interrupted = false;
     store.setAbort(() => { interrupted = true; controller.abort(); });
     const content: ContentBlock[] = [
-      ...(input.text ? [{ type: 'text' as const, text: input.text }] : []),
-      ...blocks,
+      ...(text ? [{ type: 'text' as const, text }] : []),
+      ...pendingImageBlocks,
     ];
+    pendingImageBlocks = [];
     messages.push({ role: 'user', content });
     const h = streamHandlers(store);
     try {
@@ -569,6 +575,31 @@ async function repl(opts: RunOpts): Promise<void> {
         void compactConversation(true).finally(() => { store.setStatus('idle'); running = false; });
       }
     }
+  };
+
+  const onSubmit = async (input: SubmitInput): Promise<void> => {
+    if (running) return;
+    if (input.display.startsWith('/')) {
+      void handleReplCommand(input.display, session, {
+        config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit,
+        compact: () => {
+          if (running) return;
+          running = true;
+          store.setStatus('busy');
+          void compactConversation(false).finally(() => { store.setStatus('idle'); running = false; });
+        },
+        commands,
+        gate,
+        cwd,
+        runCommandLine: (text) => { if (!running) void submitUserTurn(text, text); },
+      });
+      return;
+    }
+    const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
+    for (const err of errors) store.addSystem(`⚠ ${err}`);
+    if (!input.text && !blocks.length) { return; } // every image failed and no text — nothing to send
+    pendingImageBlocks = blocks;
+    await submitUserTurn(input.text, input.display);
   };
 
   // Resume a prior conversation before the TUI mounts (readline pickers need the plain terminal).
