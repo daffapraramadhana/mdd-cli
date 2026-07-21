@@ -54,8 +54,8 @@ describe('formatPath', () => {
 const base = { provider: 'openai', model: 'gpt-x', cwd: '~/p' };
 
 describe('formatStatus — mode', () => {
-  it('omits the mode label in normal mode', () => {
-    expect(formatStatus({ ...base, mode: 'normal' })).toBe('openai · gpt-x');
+  it('shows the mode label in normal mode', () => {
+    expect(formatStatus({ ...base, mode: 'normal' })).toBe('openai · gpt-x · normal');
   });
 
   it('shows plan mode', () => {

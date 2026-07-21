@@ -34,10 +34,12 @@ export function shortenCwd(cwd: string, home: string): string {
   return cwd;
 }
 
-/** The status-line content next to the `mdd` badge: `provider · model[ · mode][ · auto-approve]`. */
+/** The status-line content next to the `mdd` badge: `provider · model[ · mode][ · auto-approve]`.
+ *  The mode is always shown (normal · auto-accept edits · plan) so the current
+ *  posture stays visible in the status bar after a silent shift+tab cycle. */
 export function formatStatus(meta: SessionMeta): string {
   const parts = [meta.provider, meta.model];
-  if (meta.mode && meta.mode !== 'normal') parts.push(modeLabel(meta.mode));
+  if (meta.mode) parts.push(modeLabel(meta.mode));
   if (meta.autoApprove) parts.push('auto-approve');
   return parts.join(' · ');
 }
