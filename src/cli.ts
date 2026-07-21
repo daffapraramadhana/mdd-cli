@@ -18,7 +18,8 @@ import type { PlanDecision } from './tools/types.js';
 import { createGate } from './permissions/index.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
-import { loadSkills } from './skills/index.js';
+import { loadSkills, type Skill } from './skills/index.js';
+import { loadPlugins } from './plugins/index.js';
 import { nextMode, type Mode } from './modes.js';
 import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
@@ -156,6 +157,14 @@ function sessionMeta(providerName: string, model: string, cwd: string, autoAppro
   return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove, mode, branch };
 }
 
+/** Merge local skills with plugin-provided ones; local skills win on name collision. */
+function mergeSkills(base: Skill[], plugin: Skill[]): Skill[] {
+  const byName = new Map<string, Skill>();
+  for (const s of base) byName.set(s.name, s);
+  for (const s of plugin) if (!byName.has(s.name)) byName.set(s.name, s);
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** Per-turn streaming callbacks: splits <think> reasoning from answer text, tracks tools, flush at end. */
 export function streamHandlers(store: UiStore) {
   const splitter = new ThinkSplitter();
@@ -179,7 +188,10 @@ export function streamHandlers(store: UiStore) {
 async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const { provider, model, config } = await resolveSetup(opts);
   const cwd = process.cwd();
-  const skills = await loadSkills(cwd);
+  const baseSkills = await loadSkills(cwd);
+  const loaded = await loadPlugins(cwd);
+  for (const w of loaded.warnings) console.error(w);
+  const skills = mergeSkills(baseSkills, loaded.skills);
   const store = new UiStore();
   store.setTheme(config.theme ?? DEFAULT_THEME);
   store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, 'normal', gitBranch(cwd)));
@@ -312,8 +324,12 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const cwd = process.cwd();
   const branch = gitBranch(cwd);
-  const skills = await loadSkills(cwd);
+  const baseSkills = await loadSkills(cwd);
   const store = new UiStore();
+  const loaded = await loadPlugins(cwd);
+  for (const w of loaded.warnings) store.addSystem(w);
+  const skills = mergeSkills(baseSkills, loaded.skills);
+  const commands = loaded.commands;
   const registry = buildRegistry();
   const baseSystemPrompt = buildSystemPrompt(cwd);
   const messages: Message[] = [];
