@@ -17,3 +17,24 @@ export function contextLimit(model: string): number {
 export function shouldCompact(lastInputTokens: number, model: string, ratio = COMPACT_RATIO): boolean {
   return lastInputTokens > contextLimit(model) * ratio;
 }
+
+export const KEEP_EXCHANGES = 2;
+
+// A genuine user turn: role 'user' with at least one text block. A user message that
+// only carries tool_result blocks is the *middle* of an agent exchange, not a new turn.
+function isUserPrompt(m: Message): boolean {
+  return m.role === 'user' && m.content.some((b) => b.type === 'text');
+}
+
+// Split the history so the last `keepExchanges` real exchanges stay verbatim (tail) and
+// everything before is summarizable (head). The boundary always lands on a user-prompt
+// message, which guarantees no tool_use/tool_result pair is split across head/tail.
+export function splitForCompaction(
+  messages: Message[],
+  keepExchanges = KEEP_EXCHANGES,
+): { head: Message[]; tail: Message[] } {
+  const promptIndices = messages.map((m, i) => (isUserPrompt(m) ? i : -1)).filter((i) => i >= 0);
+  if (promptIndices.length <= keepExchanges) return { head: [], tail: messages };
+  const boundary = promptIndices[promptIndices.length - keepExchanges];
+  return { head: messages.slice(0, boundary), tail: messages.slice(boundary) };
+}
