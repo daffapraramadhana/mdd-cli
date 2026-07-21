@@ -22,6 +22,9 @@ export const KEEP_EXCHANGES = 2;
 
 // A genuine user turn: role 'user' with at least one text block. A user message that
 // only carries tool_result blocks is the *middle* of an agent exchange, not a new turn.
+// Invariant this boundary safety relies on: a user message is never constructed with
+// BOTH a text block and a tool_result block (pure prompt OR pure tool_result), so a
+// tool_result is never split from its tool_use across the head/tail boundary.
 function isUserPrompt(m: Message): boolean {
   return m.role === 'user' && m.content.some((b) => b.type === 'text');
 }
@@ -58,22 +61,30 @@ function elide(s: string, keep: number): string {
   return `${s.slice(0, keep)}\n… [${removed} chars elided] …\n${s.slice(-keep)}`;
 }
 
-// Shrink one block: cap tool_result content, drop images, pass everything else through.
+// Shrink one block: cap tool_result and text content, drop images, pass everything else
+// through.
 function shrinkBlock(b: ContentBlock): ContentBlock | null {
   if (b.type === 'image') return null;
   if (b.type === 'tool_result') return { ...b, content: elide(b.content, TOOL_RESULT_KEEP) };
+  if (b.type === 'text') return { ...b, text: elide(b.text, TOOL_RESULT_KEEP) };
   return b;
 }
 
-// Build the summarization request from the head. Tool results are capped and images
-// dropped so this call cannot itself overflow — even when compaction is invoked from an
-// already-maxed conversation. A trailing user instruction asks for the summary; because
-// `head` ends on an assistant message, appending a user message keeps roles alternating.
+// Build the summarization request from the head. Tool-result and text bulk is bounded
+// and images are dropped, which keeps the request small in practice — even when
+// compaction is invoked from an already-maxed conversation. If shrinking leaves a
+// message with no content (e.g. an image-only prompt), a placeholder text block is
+// substituted so the message APIs never see an empty content array. A trailing user
+// instruction asks for the summary; because `head` ends on an assistant message,
+// appending a user message keeps roles alternating.
 export function summaryInput(head: Message[]): Message[] {
-  const shrunk: Message[] = head.map((m) => ({
-    role: m.role,
-    content: m.content.map(shrinkBlock).filter((b): b is ContentBlock => b !== null),
-  }));
+  const shrunk: Message[] = head.map((m) => {
+    const content = m.content.map(shrinkBlock).filter((b): b is ContentBlock => b !== null);
+    return {
+      role: m.role,
+      content: content.length > 0 ? content : [{ type: 'text', text: '[image omitted]' }],
+    };
+  });
   return [...shrunk, { role: 'user', content: [{ type: 'text', text: SUMMARY_INSTRUCTION }] }];
 }
 

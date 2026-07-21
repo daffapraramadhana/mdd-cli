@@ -430,12 +430,18 @@ async function repl(opts: RunOpts): Promise<void> {
   // untouched.
   const compactConversation = async (auto: boolean): Promise<void> => {
     const { head, tail } = splitForCompaction(messages);
-    if (head.length === 0) { store.addSystem('Nothing to compact yet.'); return; }
+    if (head.length === 0) {
+      store.addSystem('Nothing to compact yet.');
+      lastInputTokens = 0;
+      return;
+    }
     const before = lastInputTokens;
+    const controller = new AbortController();
+    store.setAbort(() => controller.abort());
     try {
       let summary = '';
       for await (const ev of session.provider.stream(summaryInput(head), [], {
-        model: session.model, systemPrompt: SUMMARY_SYSTEM, maxTokens: 8192,
+        model: session.model, systemPrompt: SUMMARY_SYSTEM, maxTokens: 8192, signal: controller.signal,
       })) {
         if (ev.type === 'text') summary += ev.text;
       }
@@ -454,6 +460,8 @@ async function repl(opts: RunOpts): Promise<void> {
       }).catch(() => store.addSystem('⚠ could not save session history'));
     } catch (err) {
       store.addSystem(`⚠ compaction failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      store.setAbort(null);
     }
   };
 

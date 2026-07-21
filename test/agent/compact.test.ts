@@ -68,6 +68,37 @@ describe('splitForCompaction', () => {
     expect(head).toEqual([]);
     expect(tail).toEqual(short);
   });
+
+  it('never references a tool_use outside its own half from a tool_result (pair integrity)', () => {
+    const { head, tail } = splitForCompaction(sampleHistory(), 2);
+    const idsOf = (msgs: Message[], type: 'tool_use' | 'tool_result'): Set<string> => {
+      const ids = new Set<string>();
+      for (const m of msgs) {
+        for (const b of m.content) {
+          if (b.type === 'tool_use' && type === 'tool_use') ids.add(b.id);
+          if (b.type === 'tool_result' && type === 'tool_result') ids.add(b.toolUseId);
+        }
+      }
+      return ids;
+    };
+    const headUseIds = idsOf(head, 'tool_use');
+    const headResultIds = idsOf(head, 'tool_result');
+    const tailUseIds = idsOf(tail, 'tool_use');
+    const tailResultIds = idsOf(tail, 'tool_result');
+    expect(headResultIds).toEqual(headUseIds);
+    expect(tailResultIds).toEqual(tailUseIds);
+  });
+
+  it('honors a non-default keepExchanges value: tail is exactly the last exchange', () => {
+    const { head, tail } = splitForCompaction(sampleHistory(), 1);
+    // Exchange 3 (indices 8-9) is the only one kept in the tail.
+    expect(tail).toHaveLength(2);
+    expect(tail).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'prompt C' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'done C' }] },
+    ]);
+    expect(head).toHaveLength(8);
+  });
 });
 
 describe('summaryInput', () => {
@@ -111,6 +142,26 @@ describe('summaryInput', () => {
     const block = out[0].content[0];
     if (block.type !== 'tool_result') throw new Error('expected tool_result');
     expect(block.content).toBe('short');
+  });
+
+  it('replaces an image-only message with a non-empty placeholder instead of empty content', () => {
+    const head: Message[] = [
+      { role: 'user', content: [{ type: 'image', mediaType: 'image/png', data: 'AAAA' }] },
+    ];
+    const out = summaryInput(head);
+    expect(out[0].content.length).toBeGreaterThan(0);
+    expect(out[0].content).toEqual([{ type: 'text', text: '[image omitted]' }]);
+  });
+
+  it('truncates an oversized text block and marks the elision', () => {
+    const head: Message[] = [
+      { role: 'assistant', content: [{ type: 'text', text: 'y'.repeat(50_000) }] },
+    ];
+    const out = summaryInput(head);
+    const block = out[0].content[0];
+    if (block.type !== 'text') throw new Error('expected text');
+    expect(block.text.length).toBeLessThan(50_000);
+    expect(block.text).toContain('elided');
   });
 });
 
