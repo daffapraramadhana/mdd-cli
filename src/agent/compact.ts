@@ -76,8 +76,8 @@ export const SUMMARY_ACK =
   'Understood. I have the summary of the earlier conversation above and will continue from here.';
 
 // Assemble the compacted history: the summary as a user message, a synthetic assistant
-// ack, then the verbatim tail. The ack guarantees valid role alternation no matter which
-// role the tail begins with.
+// ack, then the verbatim tail. The tail must begin with a user message (as
+// splitForCompaction guarantees) so roles alternate across the seam.
 export function buildCompacted(summaryText: string, tail: Message[]): Message[] {
   return [
     { role: 'user', content: [{ type: 'text', text: summaryText }] },
