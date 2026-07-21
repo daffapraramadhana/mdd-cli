@@ -4,6 +4,34 @@ import { configDir } from '../config/index.js';
 import { parseSkillFile, type Skill } from '../skills/index.js';
 import { parseCommandFile, type Command } from './commands.js';
 
+export interface PluginManifest { name?: string; description?: string; version?: string }
+
+/** Manifest filenames tried in order: mdd's own, then a Claude Code plugin's
+ *  `.claude-plugin/plugin.json` (same name/description/version fields), so Claude
+ *  Code skill plugins install into mdd unchanged. */
+export const MANIFEST_CANDIDATES = ['mdd-plugin.json', join('.claude-plugin', 'plugin.json')];
+
+/**
+ * Read a plugin's manifest from `dir`, trying each candidate filename in order.
+ * Returns the first that is a valid JSON object, or null if none is (missing,
+ * unparseable, or non-object JSON like `null`/an array) — callers skip-and-warn.
+ */
+export async function readManifest(dir: string): Promise<PluginManifest | null> {
+  for (const rel of MANIFEST_CANDIDATES) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await readFile(join(dir, rel), 'utf8'));
+    } catch {
+      continue; // missing or unparseable → try the next candidate
+    }
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as PluginManifest;
+    }
+    // valid JSON but not an object → not a usable manifest; try the next candidate
+  }
+  return null;
+}
+
 export interface PluginInfo {
   name: string;
   description: string;
@@ -48,15 +76,9 @@ export async function loadPlugins(cwd: string): Promise<LoadedPlugins> {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const dir = join(root.dir, entry.name);
-      let manifest: { name?: string; description?: string; version?: string };
-      try {
-        const parsed: unknown = JSON.parse(await readFile(join(dir, 'mdd-plugin.json'), 'utf8'));
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          throw new Error('manifest must be a JSON object');
-        }
-        manifest = parsed as { name?: string; description?: string; version?: string };
-      } catch {
-        warnings.push(`⚠ plugin '${entry.name}' skipped: missing or invalid mdd-plugin.json`);
+      const manifest = await readManifest(dir);
+      if (!manifest) {
+        warnings.push(`⚠ plugin '${entry.name}' skipped: no valid mdd-plugin.json or .claude-plugin/plugin.json`);
         continue;
       }
       const name = manifest.name || entry.name;

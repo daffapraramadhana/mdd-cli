@@ -34,6 +34,27 @@ describe('loadPlugins', () => {
     }
   }
 
+  it('discovers a Claude Code plugin via .claude-plugin/plugin.json when mdd-plugin.json is absent', async () => {
+    const dir = join(cfgDir, 'plugins', 'superpowers');
+    await mkdir(join(dir, '.claude-plugin'), { recursive: true });
+    await writeFile(join(dir, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'superpowers', description: 'core skills', version: '6.1.1' }));
+    await mkdir(join(dir, 'skills', 'tdd'), { recursive: true });
+    await writeFile(join(dir, 'skills', 'tdd', 'SKILL.md'), `---\nname: tdd\ndescription: test-first\n---\nRed green refactor.`);
+    const r = await loadPlugins(cwd);
+    expect(r.warnings).toEqual([]);
+    expect(r.plugins[0]).toMatchObject({ name: 'superpowers', version: '6.1.1', scope: 'global', skillCount: 1 });
+    expect(r.skills.find((s) => s.name === 'tdd')?.source).toBe('plugin');
+  });
+
+  it('prefers mdd-plugin.json over .claude-plugin/plugin.json when both exist', async () => {
+    const dir = join(cfgDir, 'plugins', 'dual');
+    await mkdir(join(dir, '.claude-plugin'), { recursive: true });
+    await writeFile(join(dir, 'mdd-plugin.json'), JSON.stringify({ name: 'from-mdd' }));
+    await writeFile(join(dir, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'from-claude' }));
+    const r = await loadPlugins(cwd);
+    expect(r.plugins[0].name).toBe('from-mdd');
+  });
+
   it('returns empty result when no plugin roots exist', async () => {
     const r = await loadPlugins(cwd);
     expect(r.skills).toEqual([]);

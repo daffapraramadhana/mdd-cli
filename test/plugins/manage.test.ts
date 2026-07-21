@@ -39,6 +39,20 @@ describe('addPlugin', () => {
     await expect(addPlugin('acme/acme', { run: fakeRun })).rejects.toThrow(/already installed/);
   });
 
+  it('resolves the name from .claude-plugin/plugin.json when mdd-plugin.json is absent', async () => {
+    const claudeRun = async (cmd: string) => {
+      const m = /clone --depth 1 '[^']*' "([^"]+)"/.exec(cmd);
+      if (m) {
+        await mkdir(join(m[1], '.claude-plugin'), { recursive: true });
+        await writeFile(join(m[1], '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'superpowers' }));
+      }
+      return { ok: true, output: '' };
+    };
+    const r = await addPlugin('obra/superpowers', { run: claudeRun });
+    expect(r.name).toBe('superpowers');
+    expect(await readdir(join(cfgDir, 'plugins'))).toContain('superpowers');
+  });
+
   it('rejects a spec containing shell metacharacters', async () => {
     await expect(addPlugin('a; rm -rf ~ #', { run: fakeRun })).rejects.toThrow(/suspicious/);
   });
