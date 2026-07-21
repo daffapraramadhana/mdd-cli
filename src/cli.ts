@@ -15,10 +15,14 @@ import { getProvider, type LLMProvider } from './providers/index.js';
 import { buildRegistry } from './tools/index.js';
 import { webCtxFromConfig } from './tools/web-search.js';
 import type { PlanDecision } from './tools/types.js';
-import { createGate } from './permissions/index.js';
+import { createGate, type PermissionGate } from './permissions/index.js';
+import { renderCommand, type Command as PluginCommand } from './plugins/commands.js';
+import { runPrefill } from './plugins/prefill.js';
 import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
-import { loadSkills } from './skills/index.js';
+import { loadSkills, type Skill } from './skills/index.js';
+import { loadPlugins } from './plugins/index.js';
+import { addPlugin, listPlugins, removePlugin, updatePlugin } from './plugins/manage.js';
 import { nextMode, type Mode } from './modes.js';
 import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
@@ -156,6 +160,14 @@ function sessionMeta(providerName: string, model: string, cwd: string, autoAppro
   return { provider: providerName, model, cwd: shortenCwd(cwd, homedir()), autoApprove, mode, branch };
 }
 
+/** Merge local skills with plugin-provided ones; local skills win on name collision. */
+function mergeSkills(base: Skill[], plugin: Skill[]): Skill[] {
+  const byName = new Map<string, Skill>();
+  for (const s of base) byName.set(s.name, s);
+  for (const s of plugin) if (!byName.has(s.name)) byName.set(s.name, s);
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** Per-turn streaming callbacks: splits <think> reasoning from answer text, tracks tools, flush at end. */
 export function streamHandlers(store: UiStore) {
   const splitter = new ThinkSplitter();
@@ -179,7 +191,10 @@ export function streamHandlers(store: UiStore) {
 async function oneShot(prompt: string, opts: RunOpts): Promise<void> {
   const { provider, model, config } = await resolveSetup(opts);
   const cwd = process.cwd();
-  const skills = await loadSkills(cwd);
+  const baseSkills = await loadSkills(cwd);
+  const loaded = await loadPlugins(cwd);
+  for (const w of loaded.warnings) console.error(w);
+  const skills = mergeSkills(baseSkills, loaded.skills);
   const store = new UiStore();
   store.setTheme(config.theme ?? DEFAULT_THEME);
   store.setMeta(sessionMeta(provider.name, model, cwd, !!opts.yes, 'normal', gitBranch(cwd)));
@@ -217,6 +232,7 @@ export const HELP = [
   '  /resume            resume a past session in this project (↑/↓, enter)',
   '  /compact           summarize older history to free up context',
   '  /provider <name>   switch provider: anthropic | openai',
+  '  /plugin            manage plugins (add/list/remove/update)',
   `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
   '  shift+tab          cycle mode: normal · auto-accept edits · plan',
@@ -242,10 +258,14 @@ export interface CommandDeps {
   resumeSession: () => void;
   exit: () => void;
   compact: () => void;
+  commands?: Map<string, PluginCommand>;
+  runCommandLine?: (text: string) => void;
+  gate?: PermissionGate;
+  cwd?: string;
 }
 
 /** Execute a `/command` line, mutating `session` and reporting via the store. */
-export function handleReplCommand(input: string, session: ReplSession, deps: CommandDeps): void {
+export async function handleReplCommand(input: string, session: ReplSession, deps: CommandDeps): Promise<void> {
   const [cmd, ...rest] = input.slice(1).split(/\s+/);
   const arg = rest.join(' ').trim();
   switch (cmd) {
@@ -294,8 +314,37 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
     case 'quit':
       deps.exit();
       break;
-    default:
-      deps.store.addSystem(`unknown command: /${cmd} — try /help`);
+    case 'plugin': {
+      const [verb, ...vrest] = rest;
+      const target = vrest.join(' ').trim();
+      try {
+        if (verb === 'list' || !verb) {
+          const infos = await listPlugins(deps.cwd ?? process.cwd());
+          deps.store.addSystem(infos.length ? infos.map((p) => `${p.name}  [${p.scope}]  ${p.skillCount} skills, ${p.commandCount} commands`).join('\n') : 'no plugins installed');
+        } else if (verb === 'add' && target) {
+          const r = await addPlugin(target); deps.store.addSystem(`✓ ${r.message} — restart or it loads on next session`);
+        } else if (verb === 'remove' && target) {
+          const r = await removePlugin(target); deps.store.addSystem(r.removed ? `✓ ${r.message}` : `✗ ${r.message}`);
+        } else if (verb === 'update') {
+          const r = await updatePlugin(target || undefined); deps.store.addSystem(r.message);
+        } else {
+          deps.store.addSystem('usage: /plugin add <source> | list | remove <name> | update [name]');
+        }
+      } catch (err) { deps.store.addSystem(`✗ ${err instanceof Error ? err.message : String(err)}`); }
+      break;
+    }
+    default: {
+      const command = deps.commands?.get(cmd);
+      if (!command) { deps.store.addSystem(`unknown command: /${cmd} — try /help`); break; }
+      const rendered = renderCommand(command.body, arg);
+      if (rendered.prefill.length && deps.gate && deps.cwd !== undefined) {
+        const result = await runPrefill(rendered, { gate: deps.gate, cwd: deps.cwd });
+        for (const w of result.warnings) deps.store.addSystem(w);
+        deps.runCommandLine?.(result.text);
+      } else {
+        deps.runCommandLine?.(rendered.text);
+      }
+    }
   }
 }
 
@@ -312,8 +361,12 @@ async function repl(opts: RunOpts): Promise<void> {
 
   const cwd = process.cwd();
   const branch = gitBranch(cwd);
-  const skills = await loadSkills(cwd);
+  const baseSkills = await loadSkills(cwd);
   const store = new UiStore();
+  const loaded = await loadPlugins(cwd);
+  for (const w of loaded.warnings) store.addSystem(w);
+  const skills = mergeSkills(baseSkills, loaded.skills);
+  const commands = loaded.commands;
   const registry = buildRegistry();
   const baseSystemPrompt = buildSystemPrompt(cwd);
   const messages: Message[] = [];
@@ -489,34 +542,24 @@ async function repl(opts: RunOpts): Promise<void> {
     }
   };
 
-  const onSubmit = async (input: SubmitInput): Promise<void> => {
-    if (running) return;
-    if (input.display.startsWith('/')) {
-      handleReplCommand(input.display, session, {
-        config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit,
-        compact: () => {
-          if (running) return;
-          running = true;
-          store.setStatus('busy');
-          void compactConversation(false).finally(() => { store.setStatus('idle'); running = false; });
-        },
-      });
-      return;
-    }
-    const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
-    for (const err of errors) store.addSystem(`⚠ ${err}`);
-    if (!input.text && !blocks.length) { return; } // every image failed and no text — nothing to send
+  // Set by onSubmit right before invoking submitUserTurn so image blocks ride along without
+  // widening submitUserTurn's signature (the plugin-command path never sets this, so it stays
+  // empty for command-triggered turns).
+  let pendingImageBlocks: ContentBlock[] = [];
+
+  const submitUserTurn = async (text: string, display: string): Promise<void> => {
     running = true;
-    store.addUser(input.display);
-    if (!title) title = truncateTitle(input.display);
+    store.addUser(display);
+    if (!title) title = truncateTitle(display);
     store.setStatus('busy');
     const controller = new AbortController();
     let interrupted = false;
     store.setAbort(() => { interrupted = true; controller.abort(); });
     const content: ContentBlock[] = [
-      ...(input.text ? [{ type: 'text' as const, text: input.text }] : []),
-      ...blocks,
+      ...(text ? [{ type: 'text' as const, text }] : []),
+      ...pendingImageBlocks,
     ];
+    pendingImageBlocks = [];
     messages.push({ role: 'user', content });
     const h = streamHandlers(store);
     try {
@@ -553,6 +596,42 @@ async function repl(opts: RunOpts): Promise<void> {
         void compactConversation(true).finally(() => { store.setStatus('idle'); running = false; });
       }
     }
+  };
+
+  const onSubmit = async (input: SubmitInput): Promise<void> => {
+    if (running) return;
+    if (input.display.startsWith('/')) {
+      const cmdName = input.display.slice(1).split(/\s+/)[0];
+      const isPluginCmd = commands.has(cmdName); // plugin commands do async prefill/submit; built-ins are sync
+      let handedOff = false;
+      if (isPluginCmd) { running = true; store.setStatus('busy'); } // block concurrent submits during prefill
+      void handleReplCommand(input.display, session, {
+        config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit,
+        compact: () => {
+          if (running) return;
+          running = true;
+          store.setStatus('busy');
+          void compactConversation(false).finally(() => { store.setStatus('idle'); running = false; });
+        },
+        commands,
+        gate,
+        cwd,
+        runCommandLine: (text) => {
+          handedOff = true;
+          running = false;            // hand off; submitUserTurn re-acquires running synchronously (same tick)
+          store.setStatus('idle');
+          void submitUserTurn(text, text);
+        },
+      })
+        .catch((err) => { store.addSystem(`✗ ${err instanceof Error ? err.message : String(err)}`); })
+        .finally(() => { if (isPluginCmd && !handedOff) { running = false; store.setStatus('idle'); } });
+      return;
+    }
+    const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
+    for (const err of errors) store.addSystem(`⚠ ${err}`);
+    if (!input.text && !blocks.length) { return; } // every image failed and no text — nothing to send
+    pendingImageBlocks = blocks;
+    await submitUserTurn(input.text, input.display);
   };
 
   // Resume a prior conversation before the TUI mounts (readline pickers need the plain terminal).
@@ -605,6 +684,23 @@ async function main(): Promise<void> {
 
   program.command('models').description('List commonly-used model ids').action(() => {
     process.stdout.write(formatModels() + '\n');
+  });
+
+  const plugin = program.command('plugin').description('manage plugins (skills + slash commands)');
+  plugin.command('add <source>').description('install a plugin from owner/repo or a git url').action(async (source: string) => {
+    try { const r = await addPlugin(source); console.log(`✓ ${r.message}`); }
+    catch (err) { console.error(`✗ ${err instanceof Error ? err.message : String(err)}`); process.exitCode = 1; }
+  });
+  plugin.command('list').description('list installed plugins').action(async () => {
+    const infos = await listPlugins(process.cwd());
+    if (!infos.length) { console.log('no plugins installed'); return; }
+    for (const p of infos) console.log(`${p.name}  [${p.scope}]  ${p.skillCount} skills, ${p.commandCount} commands${p.version ? `  v${p.version}` : ''}`);
+  });
+  plugin.command('remove <name>').description('remove a global plugin').action(async (name: string) => {
+    const r = await removePlugin(name); console.log(r.removed ? `✓ ${r.message}` : `✗ ${r.message}`);
+  });
+  plugin.command('update [name]').description('git pull one or all global plugins').action(async (name?: string) => {
+    const r = await updatePlugin(name); console.log(r.message);
   });
 
   program.argument('[prompt...]', 'one-shot prompt; omit for interactive REPL').action(async (promptWords: string[]) => {

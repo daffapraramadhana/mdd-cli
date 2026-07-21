@@ -20,7 +20,7 @@ import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const GUTTER = 5;
-const HINTS = '/model  /resume  /theme  /help    shift+tab cycle mode';
+const HINTS = '/model  /plugin  /resume  /theme  /help    shift+tab cycle mode';
 const fmtElapsed = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 function Row({ label, color, children }: { label: string; color?: string; children: ReactNode }) {

@@ -3,6 +3,8 @@ import { handleReplCommand, type ReplSession, type CommandDeps } from '../src/cl
 import { UiStore } from '../src/ui/store.js';
 import type { Config } from '../src/config/index.js';
 import type { LLMProvider } from '../src/providers/index.js';
+import type { Command } from '../src/plugins/commands.js';
+import type { PermissionGate } from '../src/permissions/index.js';
 
 const fakeProvider = (name: string): LLMProvider => ({ name, async *stream() {} });
 
@@ -119,5 +121,48 @@ describe('handleReplCommand', () => {
     const t = setup();
     handleReplCommand('/frobnicate', t.session, t.deps);
     expect(t.lastSystem()).toContain('unknown command: /frobnicate');
+  });
+
+  it('runs a plugin command: renders body and submits it as a user turn', async () => {
+    const t = setup();
+    let submitted = '';
+    const cmd: Command = { name: 'greet', description: '', body: 'Hello $ARGUMENTS', source: 'plugin', plugin: 'p', path: '' };
+    const gate: PermissionGate = { async check() { return { allow: true }; } };
+    await handleReplCommand('/greet world', t.session, {
+      ...t.deps,
+      commands: new Map([['greet', cmd]]),
+      gate,
+      cwd: process.cwd(),
+      runCommandLine: (text) => { submitted = text; },
+    });
+    expect(submitted).toBe('Hello world');
+  });
+
+  it('runs a plugin command with prefill through the gate before submitting', async () => {
+    const t = setup();
+    let submitted = '';
+    const cmd: Command = { name: 'echoer', description: '', body: 'out: !`printf hi`', source: 'plugin', plugin: 'p', path: '' };
+    const gate: PermissionGate = { async check() { return { allow: true }; } };
+    await handleReplCommand('/echoer', t.session, {
+      ...t.deps,
+      commands: new Map([['echoer', cmd]]),
+      gate,
+      cwd: process.cwd(),
+      runCommandLine: (text: string) => { submitted = text; },
+    });
+    expect(submitted).toBe('out: hi');
+  });
+
+  it('still reports unknown for a name with no built-in and no plugin command', async () => {
+    const t = setup();
+    await handleReplCommand('/nope', t.session, { ...t.deps, commands: new Map() });
+    expect(t.lastSystem()).toContain('unknown command: /nope');
+  });
+
+  it('/plugin list reports installed plugins', async () => {
+    const t = setup();
+    await handleReplCommand('/plugin list', t.session, { ...t.deps, commands: new Map() });
+    // With no plugins installed in the test env, it reports none:
+    expect(t.lastSystem()).toContain('no plugins');
   });
 });
