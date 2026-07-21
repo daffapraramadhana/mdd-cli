@@ -41,9 +41,9 @@ export function parseCommandFile(
 
 export function renderCommand(body: string, args: string): { text: string; prefill: string[] } {
   const positional = args.trim().length ? args.trim().split(/\s+/) : [];
-  const text = body
-    .replace(/\$ARGUMENTS/g, () => args)
-    .replace(/\$(\d+)/g, (_, n: string) => positional[Number(n) - 1] ?? '');
+  const text = body.replace(/\$ARGUMENTS|\$(\d+)/g, (_m, n) =>
+    n === undefined ? args : (positional[Number(n) - 1] ?? ''),
+  );
   const prefill: string[] = [];
   for (const m of text.matchAll(PREFILL_RE)) prefill.push(m[1]);
   return { text, prefill };

@@ -40,4 +40,9 @@ describe('renderCommand', () => {
     const r = renderCommand('cost=$ARGUMENTS', 'a $$ b');
     expect(r.text).toBe('cost=a $$ b');
   });
+
+  it('does not re-interpret $N that appears inside substituted arguments', () => {
+    const r = renderCommand('note: $ARGUMENTS', 'a $2 b');
+    expect(r.text).toBe('note: a $2 b');
+  });
 });
