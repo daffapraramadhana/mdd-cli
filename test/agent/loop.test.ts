@@ -152,6 +152,95 @@ describe('runTurn', () => {
     expect(last.content.some((b) => b.type === 'text' && /stopped after 50/i.test(b.text))).toBe(true);
   });
 
+  it('retries a stream that dies before emitting anything, then completes', async () => {
+    let calls = 0;
+    const flaky: LLMProvider = {
+      name: 'flaky',
+      async *stream() {
+        calls++;
+        if (calls === 1) throw new Error('truncated upstream');
+        yield { type: 'text', text: 'recovered' };
+        yield { type: 'done', stopReason: 'end' };
+      },
+    };
+    const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }], {
+      provider: flaky, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+    });
+    expect(calls).toBe(2);
+    expect(out.at(-1)!.content.some((b) => b.type === 'text' && b.text.includes('recovered'))).toBe(true);
+  });
+
+  it('does not retry once text has already streamed out (avoids duplication)', async () => {
+    let calls = 0;
+    const flaky: LLMProvider = {
+      name: 'flaky',
+      async *stream() {
+        calls++;
+        yield { type: 'text', text: 'partial' };
+        throw new Error('died mid-stream');
+      },
+    };
+    await expect(runTurn([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }], {
+      provider: flaky, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+    })).rejects.toThrow(/died mid-stream/);
+    expect(calls).toBe(1);
+  });
+
+  it('gives up after MAX_STREAM_RETRIES and rethrows a persistently failing stream', async () => {
+    let calls = 0;
+    const dead: LLMProvider = {
+      name: 'dead',
+      // eslint-disable-next-line require-yield
+      async *stream() { calls++; throw new Error('always truncated'); },
+    };
+    await expect(runTurn([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }], {
+      provider: dead, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
+      cwd: dir, model: 'x', systemPrompt: 's',
+    })).rejects.toThrow(/always truncated/);
+    expect(calls).toBe(3); // initial attempt + 2 retries
+  });
+
+  it('auto-waits through a short rate-limit reset, then completes', async () => {
+    let calls = 0;
+    const limited: LLMProvider = {
+      name: 'limited',
+      async *stream() {
+        calls++;
+        if (calls === 1) {
+          const e = Object.assign(new Error('429 rate limit'), { status: 429, headers: { 'retry-after-ms': '20' } });
+          throw e;
+        }
+        yield { type: 'text', text: 'recovered after wait' };
+        yield { type: 'done', stopReason: 'end' };
+      },
+    };
+    const out = await runTurn([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }], {
+      provider: limited, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
+      cwd: dir, model: 'cc/claude-sonnet-5', systemPrompt: 's',
+    });
+    expect(calls).toBe(2);
+    expect(out.at(-1)!.content.some((b) => b.type === 'text' && b.text.includes('recovered'))).toBe(true);
+  });
+
+  it('surfaces a clean message with the reset time on a long rate-limit reset (no hammering)', async () => {
+    let calls = 0;
+    const limited: LLMProvider = {
+      name: 'limited',
+      // eslint-disable-next-line require-yield
+      async *stream() {
+        calls++;
+        throw new Error('429 [claude/claude-sonnet-5] [429]: {"type":"ratelimiterror"} (reset after 1m 4s)');
+      },
+    };
+    await expect(runTurn([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }], {
+      provider: limited, registry: buildRegistry(), gate: createGate({ confirm: async () => ({ value: 'yes' }), autoApprove: true }),
+      cwd: dir, model: 'cc/claude-sonnet-5', systemPrompt: 's',
+    })).rejects.toThrow('Rate limited on cc/claude-sonnet-5. Retry in 1m 4s.');
+    expect(calls).toBe(1); // no immediate retry against a hard limit
+  });
+
   it('routes an ask_user tool call to the ask() dep and feeds the answer back', async () => {
     const provider = new FakeProvider([
       [{ type: 'tool_use', id: 'q1', name: 'ask_user', input: { question: 'which pm?', options: ['pnpm', 'npm'] } }, { type: 'done', stopReason: 'tool_use' }],

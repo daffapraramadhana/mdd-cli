@@ -5,6 +5,9 @@ All notable changes to `mdd-cli` are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+- **Clearer rate-limit (429) handling.** When a request is rate-limited, the agent now reads the reset time from the response's `Retry-After` header (falling back to the `reset after …` hint some gateways such as 9router include in the error body). Short resets are waited out and retried automatically; longer ones surface a clean, actionable message — e.g. `Rate limited on cc/claude-sonnet-5. Retry in 1m 4s.` — instead of a raw JSON error dump, and the agent no longer immediately re-fires against a limit that is still in effect.
+
 ## [0.5.0] - 2026-07-14
 
 ### Added
