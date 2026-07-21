@@ -75,6 +75,29 @@ export async function listPlugins(cwd: string): Promise<PluginInfo[]> {
   return (await loadPlugins(cwd)).plugins;
 }
 
+/** A plugin with the names of the `/slash` commands it provides, for discoverable listings. */
+export interface PluginListing extends PluginInfo {
+  commandNames: string[];
+}
+
+/** Like {@link listPlugins} but also resolves each plugin's command names, so callers can
+ *  show users what `/slash` commands an installed plugin actually provides. */
+export async function listPluginsDetailed(cwd: string): Promise<PluginListing[]> {
+  const loaded = await loadPlugins(cwd);
+  const commands = [...loaded.commands.values()];
+  return loaded.plugins.map((p) => ({
+    ...p,
+    commandNames: commands.filter((c) => c.plugin === p.name).map((c) => c.name).sort(),
+  }));
+}
+
+/** One-line human summary of a plugin, including its command names when it has any. */
+export function formatPluginListing(p: PluginListing): string {
+  const cmds = p.commandNames.length ? `, cmds: ${p.commandNames.map((n) => `/${n}`).join(' ')}` : '';
+  const ver = p.version ? `  v${p.version}` : '';
+  return `${p.name}  [${p.scope}]  ${p.skillCount} skills, ${p.commandCount} commands${cmds}${ver}`;
+}
+
 export async function removePlugin(name: string): Promise<{ removed: boolean; message: string }> {
   if (!/^[\w][\w.-]*$/.test(name) || name.includes('..')) {
     return { removed: false, message: `invalid plugin name: ${name}` };
