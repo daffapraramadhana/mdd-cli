@@ -29,6 +29,7 @@ import { formatModels, KNOWN_MODELS } from './models.js';
 import { VERSION } from './version.js';
 import { checkForUpdate } from './update.js';
 import type { Message } from './types.js';
+import { splitForCompaction, summaryInput, buildCompacted, shouldCompact, SUMMARY_SYSTEM } from './agent/compact.js';
 
 // Small ANSI helpers for the pre-TUI onboarding output.
 const A = (s: string): string => `\x1b[1m\x1b[35m${s}\x1b[0m`; // bold magenta accent
@@ -212,6 +213,7 @@ export const HELP = [
   '  /model [id]        show or switch the model (takes effect next turn)',
   '  /models            pick a model (↑/↓, enter)',
   '  /resume            resume a past session in this project (↑/↓, enter)',
+  '  /compact           summarize older history to free up context',
   '  /provider <name>   switch provider: anthropic | openai',
   `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
@@ -237,6 +239,7 @@ export interface CommandDeps {
   pickModel: () => void;
   resumeSession: () => void;
   exit: () => void;
+  compact: () => void;
 }
 
 /** Execute a `/command` line, mutating `session` and reporting via the store. */
@@ -252,6 +255,9 @@ export function handleReplCommand(input: string, session: ReplSession, deps: Com
       break;
     case 'resume':
       deps.resumeSession();
+      break;
+    case 'compact':
+      deps.compact();
       break;
     case 'model':
       if (!arg) { deps.store.addSystem(`current model: ${session.model}`); break; }
@@ -310,6 +316,7 @@ async function repl(opts: RunOpts): Promise<void> {
   const baseSystemPrompt = buildSystemPrompt(cwd);
   const messages: Message[] = [];
   let running = false;
+  let lastInputTokens = 0;
 
   const providerName = opts.provider ?? config.defaultProvider;
   const effectiveConfig = opts.baseUrl ? { ...config, openaiBaseUrl: opts.baseUrl } : config;
@@ -417,10 +424,51 @@ async function repl(opts: RunOpts): Promise<void> {
   let app: { unmount(): void; waitUntilExit(): Promise<void> } | undefined;
   const exit = (): void => { if (app) app.unmount(); else process.exit(0); };
 
+  // Shrink the model-facing history in place: summarize everything but the last couple of
+  // exchanges, keep the tail verbatim. Only `messages` changes; the visible transcript is
+  // left intact with a system note appended. Fail-safe: on any error the history is
+  // untouched.
+  const compactConversation = async (auto: boolean): Promise<void> => {
+    const { head, tail } = splitForCompaction(messages);
+    if (head.length === 0) { store.addSystem('Nothing to compact yet.'); return; }
+    const before = lastInputTokens;
+    try {
+      let summary = '';
+      for await (const ev of session.provider.stream(summaryInput(head), [], {
+        model: session.model, systemPrompt: SUMMARY_SYSTEM, maxTokens: 8192,
+      })) {
+        if (ev.type === 'text') summary += ev.text;
+      }
+      if (!summary.trim()) { store.addSystem('⚠ compaction failed: empty summary'); return; }
+      messages.splice(0, messages.length, ...buildCompacted(summary, tail));
+      const note = auto
+        ? '✻ Auto-compacted context to stay under the model\'s token limit'
+        : '✻ Compacted context';
+      const freed = before > 0 ? `  (was ~${Math.round(before / 1000)}k input tokens)` : '';
+      store.addSystem(`${note}${freed}`);
+      lastInputTokens = 0;
+      void sessions.save({
+        id: currentId, cwd, createdAt, updatedAt: Date.now(),
+        provider: session.providerName, model: session.model, title,
+        messages, transcript: store.getState().transcript,
+      }).catch(() => store.addSystem('⚠ could not save session history'));
+    } catch (err) {
+      store.addSystem(`⚠ compaction failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const onSubmit = async (input: SubmitInput): Promise<void> => {
     if (running) return;
     if (input.display.startsWith('/')) {
-      handleReplCommand(input.display, session, { config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit });
+      handleReplCommand(input.display, session, {
+        config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit,
+        compact: () => {
+          if (running) return;
+          running = true;
+          store.setStatus('busy');
+          void compactConversation(false).finally(() => { store.setStatus('idle'); running = false; });
+        },
+      });
       return;
     }
     const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
@@ -444,7 +492,8 @@ async function repl(opts: RunOpts): Promise<void> {
         provider: session.provider, registry, gate, cwd, model: session.model,
         systemPrompt: effectiveSystemPrompt(baseSystemPrompt, session.mode, skills),
         toolFilter: (name) => name !== 'present_plan' || session.mode === 'plan',
-        onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd, onUsage: h.onUsage,
+        onText: h.onText, onToolStart: h.onToolStart, onToolEnd: h.onToolEnd,
+        onUsage: (inTok: number, outTok: number) => { lastInputTokens = inTok; h.onUsage(inTok, outTok); },
         signal: controller.signal,
         ask: store.requestAsk,
         presentPlan,
@@ -466,6 +515,11 @@ async function repl(opts: RunOpts): Promise<void> {
         provider: session.providerName, model: session.model, title,
         messages, transcript: store.getState().transcript,
       }).catch(() => store.addSystem('⚠ could not save session history'));
+      if (!interrupted && shouldCompact(lastInputTokens, session.model)) {
+        running = true;
+        store.setStatus('busy');
+        void compactConversation(true).finally(() => { store.setStatus('idle'); running = false; });
+      }
     }
   };
 

@@ -46,6 +46,11 @@ export const SUMMARY_INSTRUCTION =
   'important findings from tool results, and any unresolved next steps. Be specific about ' +
   'names and paths. Do not add commentary — this summary replaces the earlier messages.';
 
+export const SUMMARY_SYSTEM =
+  'You are a summarization engine for a coding assistant. Produce a dense, factual ' +
+  'summary of the conversation that preserves everything needed to continue the work. ' +
+  'Output only the summary text.';
+
 // Truncate a long string keeping the head and tail, eliding the middle.
 function elide(s: string, keep: number): string {
   if (s.length <= keep * 2) return s;
