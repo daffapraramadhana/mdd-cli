@@ -1,4 +1,4 @@
-import type { Message } from '../types.js';
+import type { Message, ContentBlock } from '../types.js';
 
 export const DEFAULT_CONTEXT_LIMIT = 1_000_000;
 export const COMPACT_RATIO = 0.8;
@@ -37,4 +37,37 @@ export function splitForCompaction(
   if (promptIndices.length <= keepExchanges) return { head: [], tail: messages };
   const boundary = promptIndices[promptIndices.length - keepExchanges];
   return { head: messages.slice(0, boundary), tail: messages.slice(boundary) };
+}
+
+export const TOOL_RESULT_KEEP = 1000;
+export const SUMMARY_INSTRUCTION =
+  'Summarize the conversation so far as a concise, factual briefing for continuing the ' +
+  'task. Capture: the user\'s goals and constraints, key decisions, files and code touched, ' +
+  'important findings from tool results, and any unresolved next steps. Be specific about ' +
+  'names and paths. Do not add commentary — this summary replaces the earlier messages.';
+
+// Truncate a long string keeping the head and tail, eliding the middle.
+function elide(s: string, keep: number): string {
+  if (s.length <= keep * 2) return s;
+  const removed = s.length - keep * 2;
+  return `${s.slice(0, keep)}\n… [${removed} chars elided] …\n${s.slice(-keep)}`;
+}
+
+// Shrink one block: cap tool_result content, drop images, pass everything else through.
+function shrinkBlock(b: ContentBlock): ContentBlock | null {
+  if (b.type === 'image') return null;
+  if (b.type === 'tool_result') return { ...b, content: elide(b.content, TOOL_RESULT_KEEP) };
+  return b;
+}
+
+// Build the summarization request from the head. Tool results are capped and images
+// dropped so this call cannot itself overflow — even when compaction is invoked from an
+// already-maxed conversation. A trailing user instruction asks for the summary; because
+// `head` ends on an assistant message, appending a user message keeps roles alternating.
+export function summaryInput(head: Message[]): Message[] {
+  const shrunk: Message[] = head.map((m) => ({
+    role: m.role,
+    content: m.content.map(shrinkBlock).filter((b): b is ContentBlock => b !== null),
+  }));
+  return [...shrunk, { role: 'user', content: [{ type: 'text', text: SUMMARY_INSTRUCTION }] }];
 }

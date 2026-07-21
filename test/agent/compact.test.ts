@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { contextLimit, shouldCompact, DEFAULT_CONTEXT_LIMIT, splitForCompaction } from '../../src/agent/compact.js';
+import { contextLimit, shouldCompact, DEFAULT_CONTEXT_LIMIT, splitForCompaction, summaryInput, SUMMARY_INSTRUCTION } from '../../src/agent/compact.js';
 import type { Message } from '../../src/types.js';
 
 describe('contextLimit', () => {
@@ -67,5 +67,49 @@ describe('splitForCompaction', () => {
     const { head, tail } = splitForCompaction(short, 2);
     expect(head).toEqual([]);
     expect(tail).toEqual(short);
+  });
+});
+
+describe('summaryInput', () => {
+  it('truncates oversized tool_result content and marks the elision', () => {
+    const head: Message[] = [
+      { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'read', input: {} }] },
+      { role: 'user', content: [{ type: 'tool_result', toolUseId: 't1', content: 'x'.repeat(50_000), isError: false }] },
+    ];
+    const out = summaryInput(head);
+    const block = out[1].content[0];
+    if (block.type !== 'tool_result') throw new Error('expected tool_result');
+    expect(block.content.length).toBeLessThan(50_000);
+    expect(block.content).toContain('elided');
+  });
+
+  it('drops image blocks from kept messages', () => {
+    const head: Message[] = [
+      { role: 'user', content: [
+        { type: 'text', text: 'see this' },
+        { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+      ] },
+    ];
+    const out = summaryInput(head);
+    expect(out[0].content.some((b) => b.type === 'image')).toBe(false);
+    expect(out[0].content.some((b) => b.type === 'text')).toBe(true);
+  });
+
+  it('appends a trailing user instruction asking for the summary', () => {
+    const head: Message[] = [{ role: 'assistant', content: [{ type: 'text', text: 'hi' }] }];
+    const out = summaryInput(head);
+    const last = out[out.length - 1];
+    expect(last.role).toBe('user');
+    expect(last.content).toEqual([{ type: 'text', text: SUMMARY_INSTRUCTION }]);
+  });
+
+  it('leaves short tool_result content untouched', () => {
+    const head: Message[] = [
+      { role: 'user', content: [{ type: 'tool_result', toolUseId: 't1', content: 'short', isError: false }] },
+    ];
+    const out = summaryInput(head);
+    const block = out[0].content[0];
+    if (block.type !== 'tool_result') throw new Error('expected tool_result');
+    expect(block.content).toBe('short');
   });
 });
