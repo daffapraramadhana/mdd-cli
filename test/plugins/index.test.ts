@@ -67,4 +67,29 @@ describe('loadPlugins', () => {
     expect(r.plugins).toEqual([]);
     expect(r.warnings.join(' ')).toContain('bad');
   });
+
+  it('skips a plugin whose manifest is valid JSON but not an object', async () => {
+    await writePlugin(join(cfgDir, 'plugins'), 'nul', { manifest: 'null' });
+    await writePlugin(join(cfgDir, 'plugins'), 'arr', { manifest: '[1,2,3]' });
+    const r = await loadPlugins(cwd);
+    expect(r.plugins).toEqual([]);
+    expect(r.warnings.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('project plugin skill overrides a global one of the same name', async () => {
+    await writePlugin(join(cfgDir, 'plugins'), 'g', { skills: [['dup', `---\nname: dup\n---\nGLOBAL`]] });
+    await writePlugin(join(cwd, '.mdd', 'plugins'), 'p', { skills: [['dup', `---\nname: dup\n---\nPROJECT`]] });
+    const r = await loadPlugins(cwd);
+    const dup = r.skills.filter((s) => s.name === 'dup');
+    expect(dup).toHaveLength(1);
+    expect(dup[0].body).toBe('PROJECT');
+  });
+
+  it('tolerates a valid plugin with no skills or commands subdirs', async () => {
+    await writePlugin(join(cfgDir, 'plugins'), 'bare', {}); // manifest only
+    const r = await loadPlugins(cwd);
+    expect(r.warnings).toEqual([]);
+    expect(r.plugins).toHaveLength(1);
+    expect(r.plugins[0]).toMatchObject({ name: 'bare', skillCount: 0, commandCount: 0 });
+  });
 });
