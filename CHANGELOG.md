@@ -8,6 +8,7 @@ All notable changes to `mdd-cli` are documented here. This project follows
 ### Added
 - `mdd plugin add|list|remove|update` and in-REPL `/plugin` to install and manage plugins. `plugin list` shows each plugin's `/slash` command names, not just counts.
 - Plugins can contribute skills and `/slash` commands (markdown prompt templates with optional, permission-gated shell prefill). Prefill commands are time-limited so a hung command can't freeze the session.
+- Claude Code skill plugins install into mdd unchanged: when a plugin has no `mdd-plugin.json`, mdd falls back to reading its `.claude-plugin/plugin.json`. So `mdd plugin add obra/superpowers` and similar work directly.
 
 ## [0.6.0] - 2026-07-21
 

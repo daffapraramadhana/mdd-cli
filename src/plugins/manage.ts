@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runCommand } from '../tools/exec.js';
-import { globalPluginsDir, loadPlugins, type PluginInfo } from './index.js';
+import { globalPluginsDir, loadPlugins, readManifest, type PluginInfo } from './index.js';
 
 export type Runner = (cmd: string, cwd: string) => Promise<{ ok: boolean; output: string }>;
 
@@ -45,14 +45,12 @@ export async function addPlugin(spec: string, opts: { run?: Runner } = {}): Prom
     await rm(staging, { recursive: true, force: true });
     throw new Error(`clone failed: ${res.output}`);
   }
-  let name: string;
-  try {
-    const manifest = JSON.parse(await readFile(join(staging, 'mdd-plugin.json'), 'utf8'));
-    name = manifest.name || spec.split('/').pop() || spec;
-  } catch {
+  const manifest = await readManifest(staging);
+  if (!manifest) {
     await rm(staging, { recursive: true, force: true });
-    throw new Error('plugin has no valid mdd-plugin.json');
+    throw new Error('plugin has no valid mdd-plugin.json or .claude-plugin/plugin.json');
   }
+  const name: string | number | undefined = manifest.name || spec.split('/').pop() || spec;
   if (typeof name !== 'string' || !/^[\w][\w.-]*$/.test(name) || name.includes('..')) {
     await rm(staging, { recursive: true, force: true });
     throw new Error(`plugin manifest has an unsafe name: ${String(name)}`);
