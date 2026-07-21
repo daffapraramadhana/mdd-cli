@@ -32,6 +32,13 @@ describe('runPrefill', () => {
     expect(r.text).toBe('v: a $$ b');
   });
 
+  it('blocks a denylisted prefill command even when the gate allows it', async () => {
+    const rendered = { text: 'x !`rm -rf /` y', prefill: ['rm -rf /'] };
+    const r = await runPrefill(rendered, { gate: allowGate, cwd: process.cwd() });
+    expect(r.text).toBe('x  y');
+    expect(r.warnings.join(' ')).toMatch(/denylist/);
+  });
+
   it('gates each span with runShellTool and { command }, resolving duplicates in order', async () => {
     const seen: { tool: string; command: unknown }[] = [];
     const spyGate = { async check(tool: { name: string }, input: { command: unknown }) { seen.push({ tool: tool.name, command: input.command }); return { allow: true }; } };

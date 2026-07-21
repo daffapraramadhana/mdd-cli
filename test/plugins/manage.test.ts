@@ -54,6 +54,17 @@ describe('addPlugin', () => {
     expect(left).toEqual([]);
   });
 
+  it('rejects a manifest whose name is not a string and cleans up staging', async () => {
+    const numRun = async (cmd: string) => {
+      const m = /clone --depth 1 \S+ "([^"]+)"/.exec(cmd);
+      if (m) { await mkdir(m[1], { recursive: true }); await writeFile(join(m[1], 'mdd-plugin.json'), JSON.stringify({ name: 123 })); }
+      return { ok: true, output: '' };
+    };
+    await expect(addPlugin('acme/acme', { run: numRun })).rejects.toThrow(/unsafe name/);
+    const left = (await readdir(join(cfgDir, 'plugins')).catch(() => [])).filter((d) => d.startsWith('.staging'));
+    expect(left).toEqual([]);
+  });
+
   it('cleans up staging when the clone fails', async () => {
     const failRun = async () => ({ ok: false, output: 'fatal: repository not found' });
     await expect(addPlugin('acme/acme', { run: failRun })).rejects.toThrow(/clone failed/);

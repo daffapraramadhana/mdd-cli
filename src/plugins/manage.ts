@@ -53,9 +53,9 @@ export async function addPlugin(spec: string, opts: { run?: Runner } = {}): Prom
     await rm(staging, { recursive: true, force: true });
     throw new Error('plugin has no valid mdd-plugin.json');
   }
-  if (!/^[\w][\w.-]*$/.test(name) || name.includes('..')) {
+  if (typeof name !== 'string' || !/^[\w][\w.-]*$/.test(name) || name.includes('..')) {
     await rm(staging, { recursive: true, force: true });
-    throw new Error(`plugin manifest has an unsafe name: ${name}`);
+    throw new Error(`plugin manifest has an unsafe name: ${String(name)}`);
   }
   const dest = join(root, name);
   if (await exists(dest)) {

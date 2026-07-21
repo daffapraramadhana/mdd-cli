@@ -1,6 +1,6 @@
 import type { PermissionGate } from '../permissions/index.js';
 import { runCommand } from '../tools/exec.js';
-import { runShellTool } from '../tools/run-shell.js';
+import { runShellTool, isDenied } from '../tools/run-shell.js';
 
 export interface PrefillResult { text: string; warnings: string[]; }
 
@@ -14,11 +14,13 @@ export async function runPrefill(
     const token = '!`' + command + '`';
     const decision = await opts.gate.check(runShellTool, { command });
     let replacement = '';
-    if (decision.allow) {
+    if (!decision.allow) {
+      warnings.push(`⚠ skipped prefill: ${command}`);
+    } else if (isDenied(command)) {
+      warnings.push(`⚠ blocked by safety denylist: ${command}`);
+    } else {
       const res = await runCommand(command, opts.cwd);
       replacement = res.content.trim();
-    } else {
-      warnings.push(`⚠ skipped prefill: ${command}`);
     }
     text = text.replace(token, () => replacement);
   }
