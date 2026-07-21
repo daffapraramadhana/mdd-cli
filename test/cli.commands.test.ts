@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { handleReplCommand, type ReplSession, type CommandDeps } from '../src/cli.js';
 import { UiStore } from '../src/ui/store.js';
 import type { Config } from '../src/config/index.js';
@@ -160,9 +163,20 @@ describe('handleReplCommand', () => {
   });
 
   it('/plugin list reports installed plugins', async () => {
-    const t = setup();
-    await handleReplCommand('/plugin list', t.session, { ...t.deps, commands: new Map() });
-    // With no plugins installed in the test env, it reports none:
-    expect(t.lastSystem()).toContain('no plugins');
+    // Isolate config + project dirs so the assertion doesn't depend on what's
+    // actually installed on the machine running the tests.
+    const cfgDir = await mkdtemp(join(tmpdir(), 'mdd-cfg-'));
+    const projDir = await mkdtemp(join(tmpdir(), 'mdd-proj-'));
+    const prev = process.env.MDD_CONFIG_DIR;
+    process.env.MDD_CONFIG_DIR = cfgDir;
+    try {
+      const t = setup();
+      await handleReplCommand('/plugin list', t.session, { ...t.deps, cwd: projDir, commands: new Map() });
+      expect(t.lastSystem()).toContain('no plugins');
+    } finally {
+      if (prev === undefined) delete process.env.MDD_CONFIG_DIR; else process.env.MDD_CONFIG_DIR = prev;
+      await rm(cfgDir, { recursive: true, force: true });
+      await rm(projDir, { recursive: true, force: true });
+    }
   });
 });
