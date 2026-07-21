@@ -25,14 +25,22 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-export async function addPlugin(spec: string, opts: { run?: Runner; cwd?: string } = {}): Promise<{ name: string; message: string }> {
+// Real git remotes never contain shell metacharacters; reject anything that could break out of the command.
+function assertSafeGitUrl(url: string): void {
+  if (!/^(https?:\/\/|git@|ssh:\/\/)/.test(url) || /[\s;'"`$(){}<>|&\\]/.test(url)) {
+    throw new Error(`refusing to install from suspicious source: ${url}`);
+  }
+}
+
+export async function addPlugin(spec: string, opts: { run?: Runner } = {}): Promise<{ name: string; message: string }> {
   const run = opts.run ?? defaultRun;
   const root = globalPluginsDir();
   await mkdir(root, { recursive: true });
   const staging = join(root, `.staging-${spec.replace(/[^\w-]/g, '_')}`);
   await rm(staging, { recursive: true, force: true });
   const url = resolveGitUrl(spec);
-  const res = await run(`git clone --depth 1 ${url} "${staging}"`, root);
+  assertSafeGitUrl(url);
+  const res = await run(`git clone --depth 1 '${url}' "${staging}"`, root);
   if (!res.ok) {
     await rm(staging, { recursive: true, force: true });
     throw new Error(`clone failed: ${res.output}`);
@@ -45,12 +53,21 @@ export async function addPlugin(spec: string, opts: { run?: Runner; cwd?: string
     await rm(staging, { recursive: true, force: true });
     throw new Error('plugin has no valid mdd-plugin.json');
   }
+  if (!/^[\w][\w.-]*$/.test(name) || name.includes('..')) {
+    await rm(staging, { recursive: true, force: true });
+    throw new Error(`plugin manifest has an unsafe name: ${name}`);
+  }
   const dest = join(root, name);
   if (await exists(dest)) {
     await rm(staging, { recursive: true, force: true });
     throw new Error(`'${name}' is already installed — use 'mdd plugin update ${name}'`);
   }
-  await rename(staging, dest);
+  try {
+    await rename(staging, dest);
+  } catch (err) {
+    await rm(staging, { recursive: true, force: true });
+    throw err;
+  }
   return { name, message: `installed ${name}` };
 }
 

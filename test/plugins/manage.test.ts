@@ -22,7 +22,7 @@ describe('addPlugin', () => {
 
   // Fake runner: "clones" by writing a manifest into the staging dir.
   const fakeRun = async (cmd: string) => {
-    const m = /clone --depth 1 \S+ "([^"]+)"/.exec(cmd);
+    const m = /clone --depth 1 '[^']*' "([^"]+)"/.exec(cmd);
     if (m) { await mkdir(m[1], { recursive: true }); await writeFile(join(m[1], 'mdd-plugin.json'), JSON.stringify({ name: 'acme' })); }
     return { ok: true, output: '' };
   };
@@ -37,5 +37,27 @@ describe('addPlugin', () => {
   it('refuses when the plugin already exists', async () => {
     await addPlugin('acme/acme', { run: fakeRun });
     await expect(addPlugin('acme/acme', { run: fakeRun })).rejects.toThrow(/already installed/);
+  });
+
+  it('rejects a spec containing shell metacharacters', async () => {
+    await expect(addPlugin('a; rm -rf ~ #', { run: fakeRun })).rejects.toThrow(/suspicious/);
+  });
+
+  it('rejects a cloned manifest with an unsafe name and cleans up staging', async () => {
+    const evilRun = async (cmd: string) => {
+      const m = /clone --depth 1 '[^']*' "([^"]+)"/.exec(cmd);
+      if (m) { await mkdir(m[1], { recursive: true }); await writeFile(join(m[1], 'mdd-plugin.json'), JSON.stringify({ name: '../evil' })); }
+      return { ok: true, output: '' };
+    };
+    await expect(addPlugin('acme/acme', { run: evilRun })).rejects.toThrow(/unsafe name/);
+    const left = (await readdir(join(cfgDir, 'plugins')).catch(() => [])).filter((d) => d.startsWith('.staging'));
+    expect(left).toEqual([]);
+  });
+
+  it('cleans up staging when the clone fails', async () => {
+    const failRun = async () => ({ ok: false, output: 'fatal: repository not found' });
+    await expect(addPlugin('acme/acme', { run: failRun })).rejects.toThrow(/clone failed/);
+    const left = (await readdir(join(cfgDir, 'plugins')).catch(() => [])).filter((d) => d.startsWith('.staging'));
+    expect(left).toEqual([]);
   });
 });
