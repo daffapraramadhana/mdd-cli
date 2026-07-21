@@ -6,7 +6,8 @@ export interface Skill {
   name: string;
   description: string;
   body: string;
-  source: 'project' | 'personal';
+  source: 'project' | 'personal' | 'plugin';
+  plugin?: string;
   path: string;
 }
 
