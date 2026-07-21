@@ -76,6 +76,9 @@ export async function listPlugins(cwd: string): Promise<PluginInfo[]> {
 }
 
 export async function removePlugin(name: string): Promise<{ removed: boolean; message: string }> {
+  if (!/^[\w][\w.-]*$/.test(name) || name.includes('..')) {
+    return { removed: false, message: `invalid plugin name: ${name}` };
+  }
   const dest = join(globalPluginsDir(), name);
   if (!(await exists(dest))) {
     return {

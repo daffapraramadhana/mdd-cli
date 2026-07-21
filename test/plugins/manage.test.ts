@@ -61,3 +61,11 @@ describe('addPlugin', () => {
     expect(left).toEqual([]);
   });
 });
+
+describe('removePlugin', () => {
+  it('refuses to remove a name containing path traversal', async () => {
+    const r = await removePlugin('../../etc');
+    expect(r.removed).toBe(false);
+    expect(r.message).toMatch(/invalid/);
+  });
+});

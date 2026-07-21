@@ -232,7 +232,7 @@ export const HELP = [
   '  /resume            resume a past session in this project (↑/↓, enter)',
   '  /compact           summarize older history to free up context',
   '  /provider <name>   switch provider: anthropic | openai',
-  '  /plugin <add|list|remove|update>  manage plugins',
+  '  /plugin            manage plugins (add/list/remove/update)',
   `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
   '  shift+tab          cycle mode: normal · auto-accept edits · plan',
