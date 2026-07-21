@@ -14,7 +14,7 @@ export function parseCommandFile(
   raw: string,
   _fallbackName: string,
 ): { description: string; argumentHint?: string; body: string } {
-  const normalized = raw.replace(/^﻿/, '');
+  const normalized = raw.replace(/^\ufeff/, '');
   const lines = normalized.split('\n');
   if (lines[0]?.trim() !== '---') {
     return { description: '', body: normalized.trim() };
@@ -42,7 +42,7 @@ export function parseCommandFile(
 export function renderCommand(body: string, args: string): { text: string; prefill: string[] } {
   const positional = args.trim().length ? args.trim().split(/\s+/) : [];
   const text = body
-    .replace(/\$ARGUMENTS/g, args)
+    .replace(/\$ARGUMENTS/g, () => args)
     .replace(/\$(\d+)/g, (_, n: string) => positional[Number(n) - 1] ?? '');
   const prefill: string[] = [];
   for (const m of text.matchAll(PREFILL_RE)) prefill.push(m[1]);

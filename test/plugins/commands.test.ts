@@ -35,4 +35,9 @@ describe('renderCommand', () => {
     expect(r.prefill).toEqual(['git diff main', 'git log -1']);
     expect(r.text).toContain('!`git diff main`');
   });
+
+  it('preserves literal $ sequences in arguments', () => {
+    const r = renderCommand('cost=$ARGUMENTS', 'a $$ b');
+    expect(r.text).toBe('cost=a $$ b');
+  });
 });
