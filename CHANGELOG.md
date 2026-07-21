@@ -5,6 +5,8 @@ All notable changes to `mdd-cli` are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-21
+
 ### Added
 - **Subscription quota in the status bar.** When you're on a 9router model (`cc/*` / `cx/*`), the status bar now shows that provider's soonest-resetting quota window and when it resets — e.g. `⏳ claude session 7/100 · resets 1d 0h` — refreshed periodically. It turns red as you approach the cap or when the limit is reached (`⚠ claude limit reached · resets 3h 28m`). Authentication needs **zero extra setup**: it reuses your existing model API key against a single `GET /api/usage/me` endpoint (served by 9router, or by the small `examples/quota-sidecar` service — point `MDD_ROUTER_URL` / `routerBaseUrl` at whichever hosts it). As an admin fallback (used only until that route is deployed), it can also authenticate via the dashboard login, with the password pulled from a vault at login time via `routerPasswordCommand` / `MDD_ROUTER_PASSWORD_CMD` (e.g. `security find-generic-password -s 9router -w`) — resolution order command → `MDD_ROUTER_PASSWORD` → `routerPassword`, and the session cookie is cached (`0600`) and refreshed on expiry/401. The quota endpoint defaults to the `mdd-ai-router` sidecar (`http://192.168.7.8:8080`) so onboarded users need no extra setup; override with `MDD_ROUTER_URL` / `routerBaseUrl`. Silent if unreachable, disable with `MDD_NO_QUOTA`.
 - `/compact` command and automatic context compaction near the model's token limit, so long sessions no longer dead-end on "prompt is too long".
