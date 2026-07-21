@@ -20,7 +20,7 @@ export async function runPrefill(
     } else {
       warnings.push(`⚠ skipped prefill: ${command}`);
     }
-    text = text.replace(token, replacement);
+    text = text.replace(token, () => replacement);
   }
   return { text, warnings };
 }
