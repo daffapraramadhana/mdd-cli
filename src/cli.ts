@@ -22,7 +22,7 @@ import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
 import { loadSkills, type Skill } from './skills/index.js';
 import { loadPlugins } from './plugins/index.js';
-import { addPlugin, listPlugins, removePlugin, updatePlugin } from './plugins/manage.js';
+import { addPlugin, listPluginsDetailed, formatPluginListing, removePlugin, updatePlugin } from './plugins/manage.js';
 import { nextMode, type Mode } from './modes.js';
 import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
@@ -319,8 +319,8 @@ export async function handleReplCommand(input: string, session: ReplSession, dep
       const target = vrest.join(' ').trim();
       try {
         if (verb === 'list' || !verb) {
-          const infos = await listPlugins(deps.cwd ?? process.cwd());
-          deps.store.addSystem(infos.length ? infos.map((p) => `${p.name}  [${p.scope}]  ${p.skillCount} skills, ${p.commandCount} commands`).join('\n') : 'no plugins installed');
+          const infos = await listPluginsDetailed(deps.cwd ?? process.cwd());
+          deps.store.addSystem(infos.length ? infos.map(formatPluginListing).join('\n') : 'no plugins installed');
         } else if (verb === 'add' && target) {
           const r = await addPlugin(target); deps.store.addSystem(`✓ ${r.message} — restart or it loads on next session`);
         } else if (verb === 'remove' && target) {
@@ -601,10 +601,14 @@ async function repl(opts: RunOpts): Promise<void> {
   const onSubmit = async (input: SubmitInput): Promise<void> => {
     if (running) return;
     if (input.display.startsWith('/')) {
-      const cmdName = input.display.slice(1).split(/\s+/)[0];
+      const [cmdName, verb] = input.display.slice(1).split(/\s+/);
       const isPluginCmd = commands.has(cmdName); // plugin commands do async prefill/submit; built-ins are sync
+      // The /plugin add|update|remove verbs run async network git operations; they must hold
+      // the busy lock too, else a concurrent submit interleaves during a clone/pull.
+      const isAsyncBuiltin = cmdName === 'plugin' && (verb === 'add' || verb === 'update' || verb === 'remove');
+      const takesLock = isPluginCmd || isAsyncBuiltin;
       let handedOff = false;
-      if (isPluginCmd) { running = true; store.setStatus('busy'); } // block concurrent submits during prefill
+      if (takesLock) { running = true; store.setStatus('busy'); } // block concurrent submits during async work
       void handleReplCommand(input.display, session, {
         config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit,
         compact: () => {
@@ -624,7 +628,7 @@ async function repl(opts: RunOpts): Promise<void> {
         },
       })
         .catch((err) => { store.addSystem(`✗ ${err instanceof Error ? err.message : String(err)}`); })
-        .finally(() => { if (isPluginCmd && !handedOff) { running = false; store.setStatus('idle'); } });
+        .finally(() => { if (takesLock && !handedOff) { running = false; store.setStatus('idle'); } });
       return;
     }
     const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
@@ -692,9 +696,9 @@ async function main(): Promise<void> {
     catch (err) { console.error(`✗ ${err instanceof Error ? err.message : String(err)}`); process.exitCode = 1; }
   });
   plugin.command('list').description('list installed plugins').action(async () => {
-    const infos = await listPlugins(process.cwd());
+    const infos = await listPluginsDetailed(process.cwd());
     if (!infos.length) { console.log('no plugins installed'); return; }
-    for (const p of infos) console.log(`${p.name}  [${p.scope}]  ${p.skillCount} skills, ${p.commandCount} commands${p.version ? `  v${p.version}` : ''}`);
+    for (const p of infos) console.log(formatPluginListing(p));
   });
   plugin.command('remove <name>').description('remove a global plugin').action(async (name: string) => {
     const r = await removePlugin(name); console.log(r.removed ? `✓ ${r.message}` : `✗ ${r.message}`);

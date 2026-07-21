@@ -6,8 +6,8 @@ All notable changes to `mdd-cli` are documented here. This project follows
 ## [Unreleased]
 
 ### Added
-- `mdd plugin add|list|remove|update` and in-REPL `/plugin` to install and manage plugins.
-- Plugins can contribute skills and `/slash` commands (markdown prompt templates with optional, permission-gated shell prefill).
+- `mdd plugin add|list|remove|update` and in-REPL `/plugin` to install and manage plugins. `plugin list` shows each plugin's `/slash` command names, not just counts.
+- Plugins can contribute skills and `/slash` commands (markdown prompt templates with optional, permission-gated shell prefill). Prefill commands are time-limited so a hung command can't freeze the session.
 
 ## [0.6.0] - 2026-07-21
 
