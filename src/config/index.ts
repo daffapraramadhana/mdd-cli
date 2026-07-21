@@ -9,6 +9,15 @@ export interface Config {
   openaiApiKey?: string;
   /** Custom OpenAI-compatible base URL, e.g. http://localhost:20128/v1 for 9router. */
   openaiBaseUrl?: string;
+  /** 9router dashboard origin for the quota indicator, e.g. https://ai-router.mdd.co.id. */
+  routerBaseUrl?: string;
+  /** 9router dashboard login email (optional; some deployments log in with password only). */
+  routerEmail?: string;
+  /** 9router dashboard login password for the quota indicator. Prefer routerPasswordCommand or a vault. */
+  routerPassword?: string;
+  /** Command whose stdout is the 9router password, fetched at login from your vault
+   *  (e.g. `op read op://Private/9router/password`). Preferred over a stored password. */
+  routerPasswordCommand?: string;
   /** TUI theme name (neon | ocean | mono). */
   theme?: string;
 }
@@ -45,6 +54,10 @@ export async function loadConfig(): Promise<Config> {
   if (process.env.ANTHROPIC_API_KEY) merged.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   if (process.env.OPENAI_API_KEY) merged.openaiApiKey = process.env.OPENAI_API_KEY;
   if (process.env.OPENAI_BASE_URL) merged.openaiBaseUrl = process.env.OPENAI_BASE_URL;
+  if (process.env.MDD_ROUTER_URL) merged.routerBaseUrl = process.env.MDD_ROUTER_URL;
+  if (process.env.MDD_ROUTER_EMAIL) merged.routerEmail = process.env.MDD_ROUTER_EMAIL;
+  if (process.env.MDD_ROUTER_PASSWORD) merged.routerPassword = process.env.MDD_ROUTER_PASSWORD;
+  if (process.env.MDD_ROUTER_PASSWORD_CMD) merged.routerPasswordCommand = process.env.MDD_ROUTER_PASSWORD_CMD;
   return merged;
 }
 

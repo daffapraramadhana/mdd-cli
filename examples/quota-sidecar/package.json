@@ -1,0 +1,14 @@
+{
+  "name": "mdd-quota-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tiny service that serves 9router quota to mdd-cli via the user's API key, keeping the dashboard password server-side.",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

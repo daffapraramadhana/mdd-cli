@@ -28,6 +28,8 @@ import { onboardChoice, buildOnboardPatch, type OnboardChoice } from './onboard.
 import { formatModels, KNOWN_MODELS } from './models.js';
 import { VERSION } from './version.js';
 import { checkForUpdate } from './update.js';
+import { fetchQuota } from './quota.js';
+import { getSession, login, routerCreds } from './router-auth.js';
 import type { Message } from './types.js';
 import { splitForCompaction, summaryInput, buildCompacted, shouldCompact, SUMMARY_SYSTEM } from './agent/compact.js';
 
@@ -368,6 +370,28 @@ async function repl(opts: RunOpts): Promise<void> {
   // Non-blocking: if a newer version is on npm, nudge in the status bar. Throttled to once a
   // day via a cache file and silent on any failure (offline/timeout) — never blocks startup.
   void checkForUpdate(VERSION).then((u) => { if (u?.stale) store.setUpdate(u); }).catch(() => {});
+
+  // Non-blocking: show the 9router subscription quota + reset in the status bar, refreshed
+  // periodically. Auth is a cached dashboard session cookie, refreshed lazily (on expiry)
+  // and reactively (on 401). Silent on any failure; disable with MDD_NO_QUOTA.
+  // Primary auth is the model API key against /api/usage/me (zero user setup). A configured
+  // dashboard password (creds) is only an admin fallback used until that route is deployed.
+  const creds = routerCreds(config);
+  const refreshQuota = (): void => {
+    void (async () => {
+      const cookie = creds ? (await getSession(creds)) ?? undefined : undefined;
+      const summary = await fetchQuota({
+        baseUrl: config.routerBaseUrl,
+        apiKey: config.openaiApiKey,
+        cookie,
+        reauth: creds ? async () => (await login(creds))?.cookie ?? null : undefined,
+      });
+      if (summary) store.setQuota(summary);
+    })().catch(() => {});
+  };
+  refreshQuota();
+  const quotaTimer = setInterval(refreshQuota, 60_000);
+  (quotaTimer as { unref?: () => void }).unref?.();
 
   // Session persistence: one record per REPL conversation, saved after each completed turn.
   const sessions = new SessionStore(join(configDir(), 'sessions'));

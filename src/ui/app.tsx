@@ -13,6 +13,7 @@ import { SelectList } from './select.js';
 import { Header } from './header.js';
 import { VERSION } from '../version.js';
 import { formatUsage } from '../usage.js';
+import { formatQuota } from '../quota.js';
 import { createPasteState, applyChange, expandPastes } from './paste.js';
 import { createAttachState, detectImageInsert, imageLabel, stripImageTokens } from './attach.js';
 import { statSync } from 'node:fs';
@@ -285,6 +286,14 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode }: { stor
         )}
         {/* Command hints on their own dim line, indented to align with the input. */}
         <Box paddingX={1}><Text dimColor>{HINTS}</Text></Box>
+        {(() => {
+          const q = formatQuota(state.quota, meta.model);
+          return q ? (
+            <Box paddingX={1}>
+              <Text color={q.warn ? theme.toolError : undefined} dimColor={!q.warn}>{`⏳ ${q.text}`}</Text>
+            </Box>
+          ) : null;
+        })()}
         {state.update?.stale ? (
           <Box paddingX={1}>
             <Text color={theme.accent}>{`↑ update available: v${state.update.latest} · npm i -g mdd-cli`}</Text>
