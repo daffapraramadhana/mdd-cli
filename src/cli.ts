@@ -580,6 +580,10 @@ async function repl(opts: RunOpts): Promise<void> {
   const onSubmit = async (input: SubmitInput): Promise<void> => {
     if (running) return;
     if (input.display.startsWith('/')) {
+      const cmdName = input.display.slice(1).split(/\s+/)[0];
+      const isPluginCmd = commands.has(cmdName); // plugin commands do async prefill/submit; built-ins are sync
+      let handedOff = false;
+      if (isPluginCmd) { running = true; store.setStatus('busy'); } // block concurrent submits during prefill
       void handleReplCommand(input.display, session, {
         config, effectiveConfig, store, refreshMeta, applyTheme, pickModel, resumeSession, exit,
         compact: () => {
@@ -591,8 +595,15 @@ async function repl(opts: RunOpts): Promise<void> {
         commands,
         gate,
         cwd,
-        runCommandLine: (text) => { if (!running) void submitUserTurn(text, text); },
-      });
+        runCommandLine: (text) => {
+          handedOff = true;
+          running = false;            // hand off; submitUserTurn re-acquires running synchronously (same tick)
+          store.setStatus('idle');
+          void submitUserTurn(text, text);
+        },
+      })
+        .catch((err) => { store.addSystem(`✗ ${err instanceof Error ? err.message : String(err)}`); })
+        .finally(() => { if (isPluginCmd && !handedOff) { running = false; store.setStatus('idle'); } });
       return;
     }
     const { blocks, errors } = attachImages(input.imagePaths, (p) => readFileSync(p));
