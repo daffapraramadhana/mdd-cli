@@ -158,4 +158,11 @@ describe('handleReplCommand', () => {
     await handleReplCommand('/nope', t.session, { ...t.deps, commands: new Map() });
     expect(t.lastSystem()).toContain('unknown command: /nope');
   });
+
+  it('/plugin list reports installed plugins', async () => {
+    const t = setup();
+    await handleReplCommand('/plugin list', t.session, { ...t.deps, commands: new Map() });
+    // With no plugins installed in the test env, it reports none:
+    expect(t.lastSystem()).toContain('no plugins');
+  });
 });

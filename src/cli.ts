@@ -22,6 +22,7 @@ import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
 import { loadSkills, type Skill } from './skills/index.js';
 import { loadPlugins } from './plugins/index.js';
+import { addPlugin, listPlugins, removePlugin, updatePlugin } from './plugins/manage.js';
 import { nextMode, type Mode } from './modes.js';
 import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
 import { ThinkSplitter } from './ui/think.js';
@@ -231,6 +232,7 @@ export const HELP = [
   '  /resume            resume a past session in this project (↑/↓, enter)',
   '  /compact           summarize older history to free up context',
   '  /provider <name>   switch provider: anthropic | openai',
+  '  /plugin <add|list|remove|update>  manage plugins',
   `  /theme [name]      switch theme: ${THEME_NAMES.join(' | ')}`,
   '  /help              show this help',
   '  shift+tab          cycle mode: normal · auto-accept edits · plan',
@@ -312,6 +314,25 @@ export async function handleReplCommand(input: string, session: ReplSession, dep
     case 'quit':
       deps.exit();
       break;
+    case 'plugin': {
+      const [verb, ...vrest] = rest;
+      const target = vrest.join(' ').trim();
+      try {
+        if (verb === 'list' || !verb) {
+          const infos = await listPlugins(deps.cwd ?? process.cwd());
+          deps.store.addSystem(infos.length ? infos.map((p) => `${p.name}  [${p.scope}]  ${p.skillCount} skills, ${p.commandCount} commands`).join('\n') : 'no plugins installed');
+        } else if (verb === 'add' && target) {
+          const r = await addPlugin(target); deps.store.addSystem(`✓ ${r.message} — restart or it loads on next session`);
+        } else if (verb === 'remove' && target) {
+          const r = await removePlugin(target); deps.store.addSystem(r.removed ? `✓ ${r.message}` : `✗ ${r.message}`);
+        } else if (verb === 'update') {
+          const r = await updatePlugin(target || undefined); deps.store.addSystem(r.message);
+        } else {
+          deps.store.addSystem('usage: /plugin add <source> | list | remove <name> | update [name]');
+        }
+      } catch (err) { deps.store.addSystem(`✗ ${err instanceof Error ? err.message : String(err)}`); }
+      break;
+    }
     default: {
       const command = deps.commands?.get(cmd);
       if (!command) { deps.store.addSystem(`unknown command: /${cmd} — try /help`); break; }
@@ -663,6 +684,23 @@ async function main(): Promise<void> {
 
   program.command('models').description('List commonly-used model ids').action(() => {
     process.stdout.write(formatModels() + '\n');
+  });
+
+  const plugin = program.command('plugin').description('manage plugins (skills + slash commands)');
+  plugin.command('add <source>').description('install a plugin from owner/repo or a git url').action(async (source: string) => {
+    try { const r = await addPlugin(source); console.log(`✓ ${r.message}`); }
+    catch (err) { console.error(`✗ ${err instanceof Error ? err.message : String(err)}`); process.exitCode = 1; }
+  });
+  plugin.command('list').description('list installed plugins').action(async () => {
+    const infos = await listPlugins(process.cwd());
+    if (!infos.length) { console.log('no plugins installed'); return; }
+    for (const p of infos) console.log(`${p.name}  [${p.scope}]  ${p.skillCount} skills, ${p.commandCount} commands${p.version ? `  v${p.version}` : ''}`);
+  });
+  plugin.command('remove <name>').description('remove a global plugin').action(async (name: string) => {
+    const r = await removePlugin(name); console.log(r.removed ? `✓ ${r.message}` : `✗ ${r.message}`);
+  });
+  plugin.command('update [name]').description('git pull one or all global plugins').action(async (name?: string) => {
+    const r = await updatePlugin(name); console.log(r.message);
   });
 
   program.argument('[prompt...]', 'one-shot prompt; omit for interactive REPL').action(async (promptWords: string[]) => {
