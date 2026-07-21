@@ -54,12 +54,19 @@ never a crash — matching the forgiving posture of the current `loadRoot`. The 
 
 ### Resolution & precedence
 
-Skills and commands share one precedence order, **first occurrence of a name wins**:
+On a **name collision**, first-wins in this order:
 
-1. project plugins — `.mdd/plugins/*/`
-2. project skills — `.mdd/skills/` (existing)
-3. global plugins — `~/.config/mdd/plugins/*/`
-4. personal skills — `~/.config/mdd/skills/` (existing)
+1. **Local skill files** — the existing `loadSkills()` result (`.mdd/skills/` then
+   `~/.config/mdd/skills/`). Your own skill files always outrank anything a plugin brings in.
+2. **Project plugins** — `.mdd/plugins/*/` (skills and commands).
+3. **Global plugins** — `~/.config/mdd/plugins/*/` (skills and commands).
+
+Rationale for this simpler tiering (vs. fully interleaving local files and plugins): a clean
+two-list merge — local skills, then plugin skills — is trivial to implement and reason about,
+and the interleaved case (the *same* name existing as both a local file and a plugin entry)
+is a rare edge. Within plugins, the project root is scanned before the global root, so a
+project plugin wins over a global one. Commands come only from plugins, so their order reduces
+to project-plugin over global-plugin.
 
 Built-in slash commands (`/model`, `/theme`, …) always outrank plugin commands — a plugin
 cannot shadow a built-in.
