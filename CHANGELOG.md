@@ -7,6 +7,7 @@ All notable changes to `mdd-cli` are documented here. This project follows
 
 ### Fixed
 - **Clearer rate-limit (429) handling.** When a request is rate-limited, the agent now reads the reset time from the response's `Retry-After` header (falling back to the `reset after …` hint some gateways such as 9router include in the error body). Short resets are waited out and retried automatically; longer ones surface a clean, actionable message — e.g. `Rate limited on cc/claude-sonnet-5. Retry in 1m 4s.` — instead of a raw JSON error dump, and the agent no longer immediately re-fires against a limit that is still in effect.
+- **OpenAI-compatible streaming no longer crashes on non-OpenAI backends.** Requests routed through 9router (including Claude `cc/*` and other models served over the OpenAI-compatible endpoint) could fail the whole turn with `missing finish_reason for choice 0` when the backend closed the stream without a terminating `finish_reason`. The agent now reads the raw stream directly and derives its stop reason from what actually arrived, so a stream that omits `finish_reason` completes normally instead of erroring. Parallel tool calls that omit a per-call `index`, and non-OpenAI stop reasons (e.g. `tool_use`, `max_tokens`), are handled correctly too. A stream that dies before producing any output is retried automatically (up to twice); a genuinely empty/truncated response now reports a clear error instead of a cryptic SDK one.
 
 ## [0.5.0] - 2026-07-14
 

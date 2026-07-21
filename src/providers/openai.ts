@@ -50,18 +50,27 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async *stream(messages: Message[], tools: ToolSchema[], opts: StreamOptions): AsyncIterable<ProviderEvent> {
-    const stream = await this.client.chat.completions.stream({
+    // Use the raw `create({ stream: true })` iterator, NOT the `.stream()` helper.
+    // The helper runs a strict end-of-stream finalizer that throws
+    // `missing finish_reason for choice 0` when an OpenAI-compatible backend (e.g.
+    // Claude served via 9router) closes the stream without a per-choice
+    // finish_reason. We accumulate everything we need ourselves, so the raw
+    // iterator lets a non-strict backend degrade gracefully instead of crashing.
+    const stream = await this.client.chat.completions.create({
       model: opts.model,
       max_completion_tokens: opts.maxTokens,
       messages: toOpenAIMessages(messages, opts.systemPrompt),
       tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })),
+      stream: true,
       stream_options: { include_usage: true }, // ask for token counts in the final chunk
     }, { signal: opts.signal });
 
-    let stopReason: 'end' | 'tool_use' | 'max_tokens' = 'end';
     let inputTokens = 0;
     let outputTokens = 0;
-    const calls = new Map<number, { id: string; name: string; args: string }>();
+    let finishReason: string | undefined;
+    let sawText = false;
+    const calls = new Map<string, { id: string; name: string; args: string }>();
+    let autoKey = 0;
 
     for await (const chunk of stream as AsyncIterable<Record<string, any>>) {
       if (chunk.usage) {
@@ -70,22 +79,40 @@ export class OpenAIProvider implements LLMProvider {
       }
       const choice = chunk.choices?.[0];
       if (!choice) continue;
-      if (choice.delta?.content) yield { type: 'text', text: choice.delta.content };
+      if (choice.delta?.content) { sawText = true; yield { type: 'text', text: choice.delta.content }; }
       for (const tc of choice.delta?.tool_calls ?? []) {
-        const cur = calls.get(tc.index) ?? { id: '', name: '', args: '' };
+        // Some OpenAI-compatible backends omit the per-call `index`. Fall back to
+        // the call id, then to insertion order, so parallel tool calls don't
+        // collapse onto a single key.
+        const key = tc.index != null ? `i${tc.index}` : tc.id ? `d${tc.id}` : `a${autoKey++}`;
+        const cur = calls.get(key) ?? { id: '', name: '', args: '' };
         if (tc.id) cur.id = tc.id;
         if (tc.function?.name) cur.name = tc.function.name;
         if (tc.function?.arguments) cur.args += tc.function.arguments;
-        calls.set(tc.index, cur);
+        calls.set(key, cur);
       }
-      if (choice.finish_reason === 'tool_calls') stopReason = 'tool_use';
-      else if (choice.finish_reason === 'length') stopReason = 'max_tokens';
-      else if (choice.finish_reason === 'stop') stopReason = 'end';
+      if (choice.finish_reason) finishReason = choice.finish_reason;
     }
+
     for (const c of calls.values()) {
       yield { type: 'tool_use', id: c.id, name: c.name, input: c.args ? JSON.parse(c.args) : {} };
     }
     if (inputTokens || outputTokens) yield { type: 'usage', inputTokens, outputTokens };
+
+    // A stream that produced no text, no tool calls, no usage, and never signalled a
+    // finish_reason was truncated upstream (dropped connection / router hiccup).
+    // Surface it so the agent loop can retry, rather than returning an empty turn.
+    if (!finishReason && !sawText && calls.size === 0 && !outputTokens) {
+      throw new Error(`Stream from "${opts.model}" ended with no content and no finish_reason (truncated upstream).`);
+    }
+
+    // Derive stopReason from what we actually accumulated instead of trusting one
+    // provider's exact finish_reason vocabulary. Any tool calls => a tool turn,
+    // whatever the string (OpenAI "tool_calls"; some shims "tool_use" or none).
+    // Length caps go by the OpenAI "length" / Anthropic "max_tokens" names.
+    let stopReason: 'end' | 'tool_use' | 'max_tokens' = 'end';
+    if (calls.size > 0) stopReason = 'tool_use';
+    else if (finishReason === 'length' || finishReason === 'max_tokens') stopReason = 'max_tokens';
     yield { type: 'done', stopReason };
   }
 }
