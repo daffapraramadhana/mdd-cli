@@ -5,6 +5,8 @@ All notable changes to `mdd-cli` are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-22
+
 ### Added
 - **Live slash-command menu** in the REPL input: typing `/` shows matching commands (built-in and plugin-provided) filtered as you type, with `↑`/`↓` to move the selection, `Tab` to complete, and `Esc` to dismiss.
 
