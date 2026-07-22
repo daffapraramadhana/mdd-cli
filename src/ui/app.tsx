@@ -16,6 +16,8 @@ import { formatUsage } from '../usage.js';
 import { formatQuota } from '../quota.js';
 import { createPasteState, applyChange, expandPastes } from './paste.js';
 import { createAttachState, detectImageInsert, imageLabel, stripImageTokens } from './attach.js';
+import { CommandMenu } from './command-menu.js';
+import { filterSlashCommands, type SlashCommand } from './slash-commands.js';
 import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -102,9 +104,11 @@ function renderItem(item: TranscriptItem, key: number, userNum: number, theme: T
 // top of scrollback (like Claude Code) instead of being frozen in an alternate screen.
 export interface SubmitInput { display: string; text: string; imagePaths: string[] }
 
-export function App({ store, onSubmit, showHeader = false, onCycleMode }: { store: UiStore; onSubmit: (input: SubmitInput) => void; showHeader?: boolean; onCycleMode?: () => void }) {
+export function App({ store, onSubmit, showHeader = false, onCycleMode, commands = [] }: { store: UiStore; onSubmit: (input: SubmitInput) => void; showHeader?: boolean; onCycleMode?: () => void; commands?: SlashCommand[] }) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [value, setValue] = useState('');
+  const [highlight, setHighlight] = useState(0);
+  const [menuDismissed, setMenuDismissed] = useState(false);
   const [tick, setTick] = useState(0);
   const pasteRef = useRef(createPasteState());
   const attachRef = useRef(createAttachState());
@@ -119,6 +123,16 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode }: { stor
   const theme = getTheme(state.themeName);
   const animating = state.activeTool !== null || state.status === 'busy' || state.streaming !== '';
 
+  const menuCommands = filterSlashCommands(commands, value);
+  const menuOpen =
+    state.status === 'idle' &&
+    state.pendingChoice === null &&
+    state.pendingPrompt === null &&
+    !menuDismissed &&
+    menuCommands.length > 0;
+  // Keep the highlight in range as the filtered set shrinks/grows.
+  const clampedHighlight = menuCommands.length ? Math.min(highlight, menuCommands.length - 1) : 0;
+
   useEffect(() => {
     if (!animating) return;
     const t = setInterval(() => setTick((n) => n + 1), 90);
@@ -128,6 +142,13 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode }: { stor
 
   // Esc interrupts an in-flight turn — but only when nothing else owns Esc (no select/prompt open).
   useInput((_input, key) => {
+    if (menuOpen) {
+      const len = menuCommands.length;
+      if (key.downArrow) { setHighlight((h) => (Math.min(h, len - 1) + 1) % len); return; }
+      if (key.upArrow) { setHighlight((h) => (Math.min(h, len - 1) - 1 + len) % len); return; }
+      if (key.tab && !key.shift) { setInput(`/${menuCommands[clampedHighlight].name} `); setHighlight(0); return; }
+      if (key.escape) { setMenuDismissed(true); return; }
+    }
     if (key.tab && key.shift && state.pendingChoice === null && state.pendingPrompt === null) {
       onCycleMode?.();
       return;
@@ -219,12 +240,18 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode }: { stor
   ) : (
     <Box flexDirection="column">
       <Text dimColor>{'─'.repeat(width)}</Text>
+      {menuOpen ? (
+        <Box paddingLeft={1}>
+          <CommandMenu commands={menuCommands} highlight={clampedHighlight} theme={theme} />
+        </Box>
+      ) : null}
       <Box paddingLeft={1}>
         <Text color={theme.accent}>{'> '}</Text>
         {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
         <TextInput
           value={value}
           onChange={(next) => {
+            setMenuDismissed(false);
             const prev = valueRef.current;
             const r = applyChange(prev, sanitizeInput(next), pasteRef.current, Date.now());
             pasteRef.current = r.state;
