@@ -22,6 +22,7 @@ import { runTurn } from './agent/loop.js';
 import { buildSystemPrompt, effectiveSystemPrompt } from './system-prompt.js';
 import { loadSkills, type Skill } from './skills/index.js';
 import { loadPlugins } from './plugins/index.js';
+import { buildSlashCommands } from './ui/slash-commands.js';
 import { addPlugin, listPluginsDetailed, formatPluginListing, removePlugin, updatePlugin } from './plugins/manage.js';
 import { nextMode, type Mode } from './modes.js';
 import { UiStore, mountApp, shortenCwd, type SessionMeta, type SubmitInput } from './ui/index.js';
@@ -367,6 +368,7 @@ async function repl(opts: RunOpts): Promise<void> {
   for (const w of loaded.warnings) store.addSystem(w);
   const skills = mergeSkills(baseSkills, loaded.skills);
   const commands = loaded.commands;
+  const slashCommands = buildSlashCommands([...commands.values()]);
   const registry = buildRegistry();
   const baseSystemPrompt = buildSystemPrompt(cwd);
   const messages: Message[] = [];
@@ -669,7 +671,7 @@ async function repl(opts: RunOpts): Promise<void> {
 
   // Interactive REPL in the normal terminal buffer: native smooth scroll, banner at the top
   // of scrollback, status pinned at the bottom. History persists in scrollback after exit.
-  app = mountApp(store, (input) => { void onSubmit(input); }, { showHeader: true, onCycleMode: cycleMode });
+  app = mountApp(store, (input) => { void onSubmit(input); }, { showHeader: true, onCycleMode: cycleMode, commands: slashCommands });
   await app.waitUntilExit();
 }
 
