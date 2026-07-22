@@ -54,4 +54,30 @@ describe('App slash menu', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(submitted).toBe('/plugin list');
   });
+
+  it('Enter runs the highlighted command when the menu is open', async () => {
+    const store = setupStore();
+    let submitted = '';
+    const { stdin } = render(
+      <App store={store} onSubmit={(i) => { submitted = i.display; }} commands={cmds} />,
+    );
+    stdin.write('/pl'); // menu open, only /plugin matches (highlighted)
+    await new Promise((r) => setTimeout(r, 20));
+    stdin.write('\r'); // Enter -> runs the highlighted command, not the raw "/pl"
+    await new Promise((r) => setTimeout(r, 20));
+    expect(submitted).toBe('/plugin');
+  });
+
+  it('Enter on a bare slash runs the first (highlighted) command, not "/"', async () => {
+    const store = setupStore();
+    let submitted = '';
+    const { stdin } = render(
+      <App store={store} onSubmit={(i) => { submitted = i.display; }} commands={cmds} />,
+    );
+    stdin.write('/');
+    await new Promise((r) => setTimeout(r, 20));
+    stdin.write('\r');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(submitted).toBe('/model'); // first alphabetically among [model, plugin]
+  });
 });

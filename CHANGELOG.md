@@ -5,6 +5,9 @@ All notable changes to `mdd-cli` are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+- In the slash-command menu, pressing `Enter` now runs the highlighted command instead of submitting the raw `/…` text — so `/` then `Enter` no longer reports "unknown command: /". `Tab` still completes the command into the input for adding arguments.
+
 ## [0.8.0] - 2026-07-22
 
 ### Added
