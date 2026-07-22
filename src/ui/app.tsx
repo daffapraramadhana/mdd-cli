@@ -109,6 +109,7 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode, commands
   const [value, setValue] = useState('');
   const [highlight, setHighlight] = useState(0);
   const [menuDismissed, setMenuDismissed] = useState(false);
+  const [inputEpoch, setInputEpoch] = useState(0);
   const [tick, setTick] = useState(0);
   const pasteRef = useRef(createPasteState());
   const attachRef = useRef(createAttachState());
@@ -146,7 +147,12 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode, commands
       const len = menuCommands.length;
       if (key.downArrow) { setHighlight((h) => (Math.min(h, len - 1) + 1) % len); return; }
       if (key.upArrow) { setHighlight((h) => (Math.min(h, len - 1) - 1 + len) % len); return; }
-      if (key.tab && !key.shift) { setInput(`/${menuCommands[clampedHighlight].name} `); setHighlight(0); return; }
+      if (key.tab && !key.shift) {
+        setInput(`/${menuCommands[clampedHighlight].name} `);
+        setHighlight(0);
+        setInputEpoch((e) => e + 1); // remount TextInput so its cursor moves to the end
+        return;
+      }
       if (key.escape) { setMenuDismissed(true); return; }
     }
     if (key.tab && key.shift && state.pendingChoice === null && state.pendingPrompt === null) {
@@ -249,9 +255,11 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode, commands
         <Text color={theme.accent}>{'> '}</Text>
         {state.pendingPrompt !== null ? <Text>{state.pendingPrompt} </Text> : null}
         <TextInput
+          key={`input-${inputEpoch}`}
           value={value}
           onChange={(next) => {
             setMenuDismissed(false);
+            setHighlight(0);
             const prev = valueRef.current;
             const r = applyChange(prev, sanitizeInput(next), pasteRef.current, Date.now());
             pasteRef.current = r.state;

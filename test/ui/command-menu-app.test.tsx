@@ -37,4 +37,21 @@ describe('App slash menu', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(lastFrame()).not.toContain('manage plugins');
   });
+
+  it('Tab-completes then accepts typed args without corrupting the command', async () => {
+    const store = setupStore();
+    let submitted = '';
+    const { stdin } = render(
+      <App store={store} onSubmit={(i) => { submitted = i.display; }} commands={cmds} />,
+    );
+    stdin.write('/pl');
+    await new Promise((r) => setTimeout(r, 20));
+    stdin.write('\t'); // Tab -> complete to "/plugin "
+    await new Promise((r) => setTimeout(r, 20));
+    stdin.write('list');
+    await new Promise((r) => setTimeout(r, 20));
+    stdin.write('\r'); // Enter -> submit
+    await new Promise((r) => setTimeout(r, 20));
+    expect(submitted).toBe('/plugin list');
+  });
 });
