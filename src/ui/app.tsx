@@ -170,6 +170,16 @@ export function App({ store, onSubmit, showHeader = false, onCycleMode, commands
     if (state.pendingPrompt !== null) { setInput(''); pasteRef.current = createPasteState(); attachRef.current = createAttachState(); store.resolvePrompt(current); return; }
     // A turn is running: keep the draft in the box (don't clear, don't send) until it's idle.
     if (state.status === 'busy') return;
+    // Command menu open: Enter runs the highlighted command (not the raw `/…` text the user
+    // has typed so far). Tab is the "complete, keep editing for args" path; Enter is "pick it".
+    if (menuOpen) {
+      const picked = `/${menuCommands[clampedHighlight].name}`;
+      setInput('');
+      pasteRef.current = createPasteState();
+      attachRef.current = createAttachState();
+      onSubmit({ display: picked, text: picked, imagePaths: [] });
+      return;
+    }
     const display = current.trim();
     const pasteMap = pasteRef.current.map;
     const imagePaths = [...attachRef.current.map.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
